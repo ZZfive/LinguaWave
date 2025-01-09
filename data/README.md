@@ -8,4 +8,6 @@
  - 下载：
    - [download_and_untar.sh](./libritts/download_and_untar.sh)--从CosyVoice项目中复制的下载脚本文件，可分别对dev-clean, test-clean, dev-other, test-other, train-clean-100, train-clean-360, train-other-500进行下载
    - [huggingface](https://huggingface.co/datasets/mythicinfinity/libritts)--Huggingface上数据集地址，也可直接下载
- - 
+ - 数据预处理：
+   1. [prepare_data.py](./libritts/prepare_data.py)--从CosyVoice项目中复制；将下载的LibriTTS数据集转换为类kaldi格式，生成utt2spk, wav.scp, text, spk2utt等文件
+ 
