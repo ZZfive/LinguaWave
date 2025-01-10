@@ -48,8 +48,10 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dir", type=str)
-    parser.add_argument("--onnx_path", type=str)
+    parser.add_argument("--dir", type=str,
+                        default='~/mll/tts/libritts/data/dev-clean')
+    parser.add_argument("--onnx_path", type=str,
+                        default='~/CosyVoice/pretrained_models/v2/CosyVoice-300M/speech_tokenizer_v1.onnx')
     parser.add_argument("--num_thread", type=int, default=8)
     args = parser.parse_args()
 

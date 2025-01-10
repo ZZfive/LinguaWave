@@ -65,8 +65,10 @@ if __name__ == "__main__":
                         default=1,
                         help='num processes for make parquets')
     parser.add_argument('--src_dir',
+                        default='~/mll/tts/libritts/data/dev-clean',
                         type=str)
     parser.add_argument('--des_dir',
+                        default='~/mll/tts/libritts/data/dev-clean/parquet',
                         type=str)
     args = parser.parse_args()
 

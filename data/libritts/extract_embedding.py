@@ -53,8 +53,10 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dir", type=str)  # 数据目录
-    parser.add_argument("--onnx_path", type=str)  # onnx模型路径
+    parser.add_argument("--dir", type=str,
+                        default='~/mll/tts/libritts/data/dev-clean')  # 数据目录
+    parser.add_argument("--onnx_path", type=str,
+                        default='~/CosyVoice/pretrained_models/v2/CosyVoice2-0.5B/campplus.onnx')  # onnx模型路径
     parser.add_argument("--num_thread", type=int, default=8)  # 线程数
     args = parser.parse_args()
 

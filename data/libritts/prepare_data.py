@@ -46,8 +46,10 @@ def main():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--src_dir',
+                        default='~/mll/tts/libritts/LibriTTS/dev-clean',
                         type=str)
     parser.add_argument('--des_dir',
+                        default='~/mll/tts/libritts/data/dev-clean',
                         type=str)
     args = parser.parse_args()
     main()
