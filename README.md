@@ -2,6 +2,7 @@
 一个探讨“将LLM与文本音频转换任务结合”的实验性项目
 
  - [简介](#简介)
+ - [项目结构](#项目结构)
  - [语音生成](#语音生成)
  - [音频大语言模型](#音频大语言模型)
 
@@ -12,6 +13,10 @@
 &emsp;&emsp;GLM-4-Voice基本基于CosyVoice的架构，最近刚发布的Cosyvoice2也是进一步将之前定制化的LM模块简化为Qwen架构，GLM-4-Voice中的LM模块是自家的GLM-4-9B，然后使用Flow matching训练。结构基本一致，一个用于TTS任务，一个用于语音聊天，其实本质上是训练数据性质的不同，就和mini-omni一样，同时支持ASR、TTS、语音聊天能力。本项目将针对此架构进行深入探究。
 
 &emsp;&emsp;GLM-4-Voice和CosyVoice的主体架构基本一致，使用Flow matching训练是借鉴[Matcha-TTS](https://github.com/shivammehta25/Matcha-TTS)。GLM-4-Voice和CosyVoice本质都是通过训练将文本和语音在隐空间中对齐，但CosyVoice是将文本映射到音频的隐空间，LLM模块只会预测speech token，GLM-4-Voice则更接近mini-omni，隐空间是文本和音频共存的，LLM模块会同时预测text token和speech token。从实现难易度来看，CosyVoice更容易复现，因为CosyVoice项目中提供了训练代码，目前公布了CosyVoice的训练代码，CosyVoice2还未公布，GLM-4-Voice应该是不会公布训练代码。目前的项目是先尝试在小批量数据上复现类CosyVoice2架构模型训练，再尝试复现类GLM-4-Voice模型。
+
+## 项目结构
+data中放数据构建相关的代码，先包含cosyvoice中提供的libritts数据集预处理相关函数
+utils中放一些工具函数
 
 ## 语音生成
 &emsp;&emsp;基于CosyVoice项目公布的信息对CosyVoice进行SFT或全量训练应该问题不大，但CosyVoice2中将LM模块简化为Qwen架构，并且优化了speech tokenizer，基于其进行复现的价值应该更大，故目前是想将Qwen架构的LLM模块用其他的LLM模型替换，如Internlm或Llama等，通过训练复现类CosyVoice2架构的语音生成模型，既证明CosyVoice工作的有效性，也提高个人对多模态LLM，音频生成等方面的理解。
