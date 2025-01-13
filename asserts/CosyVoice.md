@@ -60,4 +60,42 @@
 &emsp;&emsp;论文中公布的训练细节并不详细，但CosyVoice中提供了比较详细的训练脚本和代码，具体细节可参考。
 
 ## CosyVoice2
-&emsp;&emsp;
+&emsp;&emsp;CosyVoice的成功，证明了LM+CFM的TTS架构的高效，开发团队趁热打铁，在CosyVoice基础上改进了流式能力，优化性能，推出了CosyVoice2。
+
+&emsp;&emsp;CosyVoice2的架构如下图所示，整体架构与CosyVoice1类似，但增加了流式推理能力，并使用多任务学习来提高性能。主要从以下三个方面优化：
+1. 用有限标量量化(Finite scalar quantization，FSQ)替换语音标记器中的矢量量化(VQ)，提高码本利用率，捕获更多的语音信息
+2. 简化LM模块，移除了text encoder和speaker embedding，允许直接使用预训练的LLM作为backbone，增强上下文理解
+3. 开发了一个块感知的因果流匹配模型支持各种合成场景，能在单模型推理中启动流式和非流式合成
+
+### 架构细节
+![enter image description here](CosyVoice2_structure.png?raw=true)
+
+&emsp;&emsp;CosyVoice2架构图如上所示，整体结构与CosyVoice变化不大，主要是各个模块内的存在一些细节区别。
+
+#### Text Tokenizer
+&emsp;&emsp;CosyVoice2直接使用原始文本作为输入，通过BPE文本分词器进行分词，消除了“字素到音素转换过程”所需的前端模型，简化了数据预处理工作流程，还使模型能够以端到端的方式学习各种上下文单词的发音。与文本 LLM 中常用的分词器不同，CosyVoice 2 掩盖了一对多的标记。这可以防止单个token发音变得过长，并减少数据稀疏性引起的极端情况。
+
+#### Speech Tokenizer
+&emsp;&emsp;CosyVoice2使用FSQ替换VQ，在FSQ中经过$Encoder_1$编码后中间特征先隐射到D维的低秩空间，然后对向量的每个维度的值通过有界舍入操作ROUND量化到[-K,K]范围，然后再将量化后的低秩表征投影会原始维度。训练阶段使用straight-through estimator(STE)近似FSQ和$Encoder_1$的梯度，通过(2K + 1)进制系统将量化后的值转换为单个token，公式如下；$Encoder_1$、FSQ模块、有界ROUND运算和索引计算形成了CosyVoice2的Speech Tokenizer。
+$$\mu_i=\sum_{j=0}^{D-1} \bar{h}_{i,j}(2K+1)^j$$
+
+#### Text-Speech Language Model
+&emsp;&emsp;CosyVoice2使用预训练的Qwen2.5-0.5B作为backbone，以文本为提示吃自回归生成speech tokens。实验发现在LM中使用speaker embedding会造成信息泄露，且其包含的语言和副语言信息会损害LM的韵律自然都和跨语言能力。此外，因为Qwen2.5-0.5B模型的想打能力，其可以对齐文本和specch tokens，故移除了Text Encoder。
+
+&emsp;&emsp;LM模块简化后，可以建立一个同时支持流式和非流式的的生成模型。流式是表示输入文本在连续流中接受，而不是预先要获取整个完整文本句子。CosyVoice2中流式和非流式的区别支持LM的输出序列的构建方式不同：
+1. 流式--下图上半部分；LM输入中以一个预定义的比例N:M将文本tokens和音频tokens混合，即每N个文本tokens后面接M个音频tokens。所过下一个token是文本token，则希望模型预测出Filling token，而不是文本token。一旦文本tokens耗尽，turn of speech token和剩余的语音tokens顺序拼接，形成流模式下的混合文本-语音tokens序列。
+2. 非流式--下图下半部分；LM的输入依次由start of sequence token、所有的文本tokens、turn of speech token、所有的音频tokens、end of sequence token组成。
+
+![enter image description here](CosyVoice2_input.png?raw=true)
+
+&emsp;&emsp;通过同时在以上两种序列上训练text-speech LM，可以在单个统一模型中执行流式和非流式语音生成。
+
+#### Chunk-aware Flow Matching
+&emsp;&emsp;CosyVoice2的FM模块架构图和和用于流式生成的四类Mask如下图所示。FM模块结构与CosyVoice中实现不同，但训练思路基本一致。训练阶段时间步长服从均匀分布$U[0,1]$，但推理时与CosyVoice一致，使用余弦调度器为生成早期提供更多推理步数，也使用CFG方式进行训练。为了改善流式生成性能，CosyVoice2将多步流估计视为一个堆叠更深的神经网络；通过将神经网络因果展开，可以将其应用于流式生成，为此构建了四种掩码来满足不同的应用情况。
+
+![enter image description here](CosyVoice2_cfm.png?raw=true)
+
+### 训练细节
+&emsp;&emsp;CosyVoice2的训练细节与CosyVoice1类似，但增加了FSQ模块，并使用多任务学习来提高性能。
+
+
