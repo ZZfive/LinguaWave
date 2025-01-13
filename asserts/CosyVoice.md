@@ -92,10 +92,18 @@ $$\mu_i=\sum_{j=0}^{D-1} \bar{h}_{i,j}(2K+1)^j$$
 
 #### Chunk-aware Flow Matching
 &emsp;&emsp;CosyVoice2的FM模块架构图和和用于流式生成的四类Mask如下图所示。FM模块结构与CosyVoice中实现不同，但训练思路基本一致。训练阶段时间步长服从均匀分布$U[0,1]$，但推理时与CosyVoice一致，使用余弦调度器为生成早期提供更多推理步数，也使用CFG方式进行训练。为了改善流式生成性能，CosyVoice2将多步流估计视为一个堆叠更深的神经网络；通过将神经网络因果展开，可以将其应用于流式生成，为此构建了四种掩码来满足不同的应用情况。
+1. Non-causal Mask--非因果掩码，用于离线模式，可通过关注所有条件帧来实现最佳性能，适用于对延迟不敏感的场景
+2. Full-causal Mask--全因果掩码，为需要极低延迟场景涉及，当前帧只关注过去帧
+3. Chunk-M Mask--延迟和性能之间的权衡，可以利用过去帧和M个未来帧的信息，适合要求第一个chunk生成较快的场景
+4. Chunk-2M Mask--牺牲更多的实时性来获得更好的性能，更接近离线模式
 
 ![enter image description here](CosyVoice2_cfm.png?raw=true)
 
+&emsp;&emsp;对于小批量中的每个训练样例，从上述四种掩码中按均匀分布随机采样一个掩码。通过这种方式，一个流匹配模型可以兼容不同的场景，降低部署的复杂性。这种分块感知训练的另一个优点是，具有更多上下文的掩码可以作为具有较少上下文的掩码的教师，是一种隐式的自蒸馏方案。
+
 ### 训练细节
-&emsp;&emsp;CosyVoice2的训练细节与CosyVoice1类似，但增加了FSQ模块，并使用多任务学习来提高性能。
+&emsp;&emsp;CosyVoice2的训练细节
 
+#### Multi-Speaker Fine-tuning
 
+#### Reinforcement Learning for SFT
