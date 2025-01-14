@@ -21,7 +21,7 @@ utils中放一些工具函数
 ## 语音生成
 &emsp;&emsp;基于CosyVoice项目公布的信息对CosyVoice进行SFT或全量训练应该问题不大，但CosyVoice2中将LM模块简化为Qwen架构，并且优化了speech tokenizer，基于其进行复现的价值应该更大，故目前是想将Qwen架构的LLM模块用其他的LLM模型替换，如Internlm或Llama等，通过训练复现类CosyVoice2架构的语音生成模型，既证明CosyVoice工作的有效性，也提高个人对多模态LLM，音频生成等方面的理解。
 
-&emsp;&emsp;CosyVoice系列模型中推理过程主要包括三个模块，分别是llm模块、flow模块和hift模块，llm模块可简单理解为将文本和语音对齐，然后预测speech tokens，flow模块是基于预测的speech tokens转换而来的特征向量生成音频mel谱图，hift则是将mel谱图转换为音频。此外，还有一个用于从音频中提取speech tokens的speech tokenizer模块。目前的想法是从头对llm模块和flow模块进行训练，而speech tokenizer和hift模块可以直接复用CosyVoice项目中提供的预训练模型。
+&emsp;&emsp;CosyVoice系列模型中推理过程主要包括三个模块，分别是llm模块、flow模块和hift模块，llm模块可简单理解为将文本和语音对齐，然后预测speech tokens，flow模块是基于预测的speech tokens转换而来的特征向量生成音频mel谱图，hift则是将mel谱图转换为音频。此外，还有一个用于从音频中提取speech tokens的speech tokenizer模块。目前的想法是从头对llm模块和flow模块进行训练，而speech tokenizer和hift模块可以直接复用CosyVoice项目中提供的预训练模型。CosyVoice模型的详细解析见此文档[CosyVoice.md](asserts/CosyVoice.md)
 
 待办事项
  - [ ] 先基于CosyVoice项目公布的信息，使用libritts数据集对原始CosyVoice模型中的llm模块和flow模块从头开始训练，了解熟悉训练数据构建、模型构建、模型训练全过程

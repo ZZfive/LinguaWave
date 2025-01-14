@@ -1,5 +1,10 @@
 # CosyVoice原理解析
-&emsp;&emsp;在实际训练之前，需要更进一步对CosyVoice的架构、训练过程等分析，加强理解，便于后续的复现。
+在实际训练之前，需要更进一步对CosyVoice的架构、训练过程等分析，加强理解，便于后续的复现。
+
+ - [CosyVoice1](#CosyVoice1)
+ - [CosyVoice2](#CosyVoice2)
+ - [注意事项](#注意事项)
+
 
 ## CosyVoice1
 ### 架构细节
@@ -126,3 +131,6 @@ $$
 |:--------:|:-------------:|
 | Chinese  |    110,884    |
 | English  |     99,918    |
+
+## 注意事项
+1. CosyVoice2中lm模块为Qwen2.5-0.5B模型，该模型正常情况下使用内部的embed_tokens层将输入的文本ids序列转换为embeddings嵌入后进行后续计算；但CosyVoice2中的输入除了文本外，还有音频，为了复用Qwen2.5-0.5B模型中的embed_tokens层并且同时能处理speech tokens，CosyVoice2的做法是先单独使用embed_tokens层对文本ids序列进行嵌入转换操作，然后再使用额外的speech_embedding层对speech tokens进行嵌入转换操作，speech_embedding层的输出维度要与embed_tokens层的输出维度一致，Qwen2.5-0.5B中是896。完成嵌入转换操作后，将所有的嵌入向量拼接得到lm_input，transfomers库中实现的Qwen2Model的forward函数支持直接传入inputs_embeds，即lm_input，就实现了在复用了Qwen2.5-0.5B模型中的embed_tokens层的同时，还能处理speech tokens。

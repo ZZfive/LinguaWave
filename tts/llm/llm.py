@@ -236,7 +236,7 @@ class Qwen2Encoder(torch.nn.Module):
     def forward_one_step(self, xs, masks, cache=None):
         input_masks = masks[:, -1, :]  # 只取最后一个时间步的注意力掩码，shape从[1, seq_len, seq_len]变为[1, seq_len]，如[1, 45, 45]->[1, 45]；Qwen2ForCausalLM内部会重新构建有效的causal mask
         outs = self.model(
-            inputs_embeds=xs,
+            inputs_embeds=xs,  # 此处xs就是构建的lm_input，其中包含了sos_eos_emb、embedding、text tokens、task_id_emb、prompt speech tokens，不是单纯的text tokens，并且已转换为嵌入向量；将其传给inputs_embeds，在内部不会再调用Qwen2Model的embed_tokens层进行embedding操作
             attention_mask=input_masks,
             output_hidden_states=True,  # 输出所有层的隐藏状态
             return_dict=True,  # 以字典形式返回结果
