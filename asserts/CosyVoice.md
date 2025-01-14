@@ -102,8 +102,27 @@ $$\mu_i=\sum_{j=0}^{D-1} \bar{h}_{i,j}(2K+1)^j$$
 &emsp;&emsp;对于小批量中的每个训练样例，从上述四种掩码中按均匀分布随机采样一个掩码。通过这种方式，一个流匹配模型可以兼容不同的场景，降低部署的复杂性。这种分块感知训练的另一个优点是，具有更多上下文的掩码可以作为具有较少上下文的掩码的教师，是一种隐式的自蒸馏方案。
 
 ### 训练细节
-&emsp;&emsp;CosyVoice2的训练细节
-
 #### Multi-Speaker Fine-tuning
+&emsp;&emsp;目前发布的CosyVoice2-0.5B模型可看作预训练的base模型，在其基础上进行特定的说话人/speakers微调可以进一步提高生成质量和相似度。CosyVoice2提出了多说话疼监督微调/mSFT，即同时再多个说话人数据上微调预训练模型。这种方法确保了跨多个说话者的全面韵律和发音覆盖率，并减轻了预训练模型的潜在灾难性遗忘。为了避免各种speakers之间的音色混淆，将speaker提示标签“Speaker A<|endofprompt|>”添加到特定说话者的输入文本中，类似于Instruct prompt。如果训练样本中没有提供speaker标签，则使用默认的s“unknown<|endofprompt|>”。在整个mSFT过程中，学习率设置为 1e-5。
 
 #### Reinforcement Learning for SFT
+&emsp;&emsp;为提高CosyVoice2性能，使用speaker相似度/SS和ASR系统的识别单次错误率WER作为奖励函区分preferred sample $x^w$和rejected sample $x^l$，使用DPO进行优化，即：
+$$L_{DPO}(\pi_{\theta};\pi_{ref})=-\log \sigma(\beta \log \frac{\pi_{\theta}(\mu^w|y)}{\pi_{ref}(\mu^w|y)}-\beta \log \frac{\pi_{\theta}(\mu^l|y)}{\pi_{ref}(\mu^l|y)})$$
+其中$\mu^w$和$\mu^l$分别是从preferred sample $x^w$和rejected sample $x^l$中提取的speech tokens。
+
+&emsp;&emsp;然而这种方法既耗时，计算量又大，因为它会反复通过TTS系统合成音频，以获得可区分的偏好和被拒绝的样本；训练过程中一个训练步骤需要四次前向操作。为了简化流程，将LM预测的speech tokens $\mu_i \in \lbrace 0,1,...,(2K+1)^D-1 \rbrace$恢复为低质空间向量$\bar{H}$，然后直接使用speech tokenizer后半部分的ASR后端预测出输入文本；预测的对数后验概率可视为优化text-speech LM的ASR奖励函数。训练过程中，ASR后端冻结，
+$$
+\begin{align*}
+\bar{h}_{i,j} & = [\frac{\mu_i}{(2K+1)^j}] \mod (2K+1) \\
+\hat{H} & = Proj_{up}(\bar{H}) \\
+L_{ASR} & = -\log p(Y|\hat{H};\theta_{ASR})
+\end{align*}
+$$
+其中$Y$是输入文本，$\hat{H}$是从预测的speech tokens中恢复的低秩表征。由于$u_i \sim P(u_i|u_{1:i-1},Y;\theta_{LM})$的样本操作仍然阻止直接优化模型，使用 gumbel softmax 采样使其可微，然后通过 $L_{ASR}$ 优化 $\theta_{LM}$。
+
+#### 数据集
+&emsp;&emsp;基于开源ASR数据集、内部数据和TTS生成的数据构建了一个200000小时的数据集用于训练speech tokenizer，虽然此数据集只包含中文和英文，但实验发现训练后的speech tokenizer对其他语言有zeto-shot能力，其可以用于日语和韩语等语言生成。speech tokenizer训练构成如下表所示，而CosyVoice2使用了与CosyVoice相同的训练数据，具体见上述部分。
+| Language | Duration (hr) |
+|:--------:|:-------------:|
+| Chinese  |    110,884    |
+| English  |     99,918    |
