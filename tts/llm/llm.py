@@ -182,7 +182,7 @@ class TransformerLM(torch.nn.Module):
         text = self.text_embedding(text)
 
         # 1. encode text
-        text, text_len = self.encode(text, text_len)   # 使用text encoder进行文本特征编码，[batch_size, seq_len, llm_input_size]
+        text, text_len = self.encode(text, text_len)   # 使用text encoder进行文本特征编码，[batch_size, text_len, llm_input_size]
 
         # 2. encode embedding
         if embedding.shape[0] != 0:  # 此处的embedding是说话人embedding特征
@@ -199,7 +199,7 @@ class TransformerLM(torch.nn.Module):
             prompt_speech_token_emb = self.speech_embedding(prompt_speech_token)
         else:
             prompt_speech_token_emb = torch.zeros(1, 0, self.llm_input_size, dtype=text.dtype).to(device)  # 如果prompt_speech_token_len为0，则初始化一个全0的speech token embedding，维度为 [1, 0, 1024]
-        lm_input = torch.concat([sos_eos_emb, embedding, text, task_id_emb, prompt_speech_token_emb], dim=1)  # 将sos_eos_emb、embedding、text、task_id_emb、prompt_speech_token_emb拼接在一起，得到lm_input，维度为 [1, seq_len+1, 1024]
+        lm_input = torch.concat([sos_eos_emb, embedding, text, task_id_emb, prompt_speech_token_emb], dim=1)  # 将sos_eos_emb、embedding、text、task_id_emb、prompt_speech_token_emb拼接在一起，得到lm_input，维度为 [1, 1+1+text_len+speech_len, 1024]
 
         # 4. cal min/max_length
         min_len = int((text_len - prompt_text_len) * min_token_text_ratio)
@@ -234,7 +234,7 @@ class Qwen2Encoder(torch.nn.Module):
         self.model = Qwen2ForCausalLM.from_pretrained(pretrain_path)
 
     def forward_one_step(self, xs, masks, cache=None):
-        input_masks = masks[:, -1, :]  # 只取最后一个时间步的注意力掩码，shape从[1, seq_len, seq_len]变为[1, seq_len]，如[1, 45, 45]->[1, 45]；Qwen2ForCausalLM内部会重新构建有效的causal mask
+        input_masks = masks[:, -1, :]  # 只取最后一个时间步的注意力掩码，shape从[1, text_len, text_len]变为[1, text_len]，如[1, 45, 45]->[1, 45]；Qwen2ForCausalLM内部会重新构建有效的causal mask
         outs = self.model(
             inputs_embeds=xs,  # 此处xs就是构建的lm_input，其中包含了sos_eos_emb、embedding、text tokens、task_id_emb、prompt speech tokens，不是单纯的text tokens，并且已转换为嵌入向量；将其传给inputs_embeds，在内部不会再调用Qwen2Model的embed_tokens层进行embedding操作
             attention_mask=input_masks,
@@ -360,7 +360,7 @@ class Qwen2LM(torch.nn.Module):
         device = text.device
         text = torch.concat([prompt_text, text], dim=1)  # 参考音频对应的文本prompt_text和输入目标文本text拼接
         text_len += prompt_text_len
-        text = self.llm.model.model.embed_tokens(text)  # 用Qwen2Encoder对象中的embedding层进行文本特征，[1, seq_len, llm_input_size]，如[1, 8, 896]
+        text = self.llm.model.model.embed_tokens(text)  # 用Qwen2Encoder对象中的embedding层进行文本特征，[1, text_len, llm_input_size]，如[1, 8, 896]
 
         # 2. encode embedding
         embedding = torch.zeros(1, 0, self.llm_input_size, dtype=text.dtype).to(device).to(text.dtype)  # [1, 0, 896]；与cosyvoice中不同，cosyvoice2在speech tokens预测时不使用说话人embedding
