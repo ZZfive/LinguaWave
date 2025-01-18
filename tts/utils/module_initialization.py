@@ -1,11 +1,15 @@
 import os
+import sys
+sys.path.append("/home/dbt/zjy/mll/LinguaWave")
+sys.path.append("/home/dbt/zjy/CosyVoice/third_party/Matcha-TTS")
 from functools import partial
 from typing import List
 
+import torch
 from omegaconf import DictConfig
 
 from tts.utils.common import ras_sampling
-from tts.llm.llm import Qwen2Encoder, Qwen2LM
+from tts.llm.llm import Qwen2Encoder, Qwen2LM, InternLM2Encoder, InternLM2LM
 from tts.flow.decoder import ConditionalDecoder
 from tts.flow.flow_matching import CausalConditionalCFM
 from tts.transformer.upsample_encoder import UpsampleConformerEncoder
@@ -16,25 +20,34 @@ def initialize_tokenize():
     pass
 
 
-def initialize_llm(llm_input_size: int,
+def initialize_llm(llm_type: str,
+                   llm_input_size: int,
                    llm_output_size: int,
+                   pretrain_path: str = "",
                    speech_token_size: int = 6561,
                    length_normalized_loss: bool = True,
                    lsm_weight: float = 0,
-                   pretrain_path: str = "",
                    top_p: float = 0.8,
                    top_k: int = 25,
                    win_size: int = 10,
                    tau_r: float = 0.1
-                   ) -> Qwen2LM:
+                   ) -> torch.nn.Module:
     if not os.path.exists(pretrain_path):
         raise FileNotFoundError(f"pretrain_path {pretrain_path} not found")
+    
+    if llm_type == "qwen2":
+        llm_class = Qwen2Encoder
+        lm_class = Qwen2LM
+    elif llm_type == "internlm2":
+        llm_class = InternLM2Encoder
+        lm_class = InternLM2LM
+    else:
+        raise ValueError(f"llm_type {llm_type} not supported")
 
-    llm = Qwen2Encoder(pretrain_path)
 
+    llm = llm_class(pretrain_path)
     sampling = partial(ras_sampling, top_p=top_p, top_k=top_k, win_size=win_size, tau_r=tau_r)
-
-    lm = Qwen2LM(llm_input_size, llm_output_size, speech_token_size, llm, sampling, length_normalized_loss, lsm_weight)
+    lm = lm_class(llm_input_size, llm_output_size, speech_token_size, llm, sampling, length_normalized_loss, lsm_weight)
 
     return lm
 
@@ -138,8 +151,15 @@ def initialize_causal_flow(encoder: UpsampleConformerEncoder = None,
 
 
 if __name__ == "__main__":
-    flow_decoder_estimator = initialize_flow_decoder_estimator()
-    print(flow_decoder_estimator)
+    llm_type = "internlm2"
+    llm_input_size = 2048
+    llm_output_size = 2048
+    llm_pretrain_path = "/home/dbt/zjy/mll/weights/internlm2_5-1_8b"
+    lm = initialize_llm(llm_type, llm_input_size, llm_output_size, llm_pretrain_path)
+    print(lm)
+
+    # flow_decoder_estimator = initialize_flow_decoder_estimator()
+    # print(flow_decoder_estimator)
     # flow_decoder = initialize_causal_flow_decoder(flow_decoder_estimator)
     # print(flow_decoder)
     # flow_encoder = initialize_causal_flow_encoder()

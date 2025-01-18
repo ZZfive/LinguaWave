@@ -400,7 +400,7 @@ class Qwen2LM(torch.nn.Module):
 class InternLM2Encoder(torch.nn.Module):
     def __init__(self, pretrain_path):
         super().__init__()
-        self.model = AutoModelForCausalLM.from_pretrained(pretrain_path)
+        self.model = AutoModelForCausalLM.from_pretrained(pretrain_path, trust_remote_code=True)
 
     def forward_one_step(self, xs, masks, cache=None):
         input_masks = masks[:, -1, :]  # 只取最后一个时间步的注意力掩码，shape从[1, text_len, text_len]变为[1, text_len]，如[1, 45, 45]->[1, 45]；InternLM2ForCausalLM内部会重新构建有效的causal mask
@@ -417,6 +417,42 @@ class InternLM2Encoder(torch.nn.Module):
         return xs, new_cache
 
 
+"""
+InternLM2LM(
+  (llm_embedding): Embedding(2, 2048)
+  (llm): InternLM2Encoder(
+    (model): InternLM2ForCausalLM(
+      (model): InternLM2Model(
+        (tok_embeddings): Embedding(92544, 2048, padding_idx=2)
+        (layers): ModuleList(
+          (0-23): 24 x InternLM2DecoderLayer(
+            (attention): InternLM2Attention(
+              (wqkv): Linear(in_features=2048, out_features=4096, bias=False)
+              (wo): Linear(in_features=2048, out_features=2048, bias=False)
+              (rotary_emb): InternLM2DynamicNTKScalingRotaryEmbedding()
+            )
+            (feed_forward): InternLM2MLP(
+              (w1): Linear(in_features=2048, out_features=8192, bias=False)
+              (w3): Linear(in_features=2048, out_features=8192, bias=False)
+              (w2): Linear(in_features=8192, out_features=2048, bias=False)
+              (act_fn): SiLU()
+            )
+            (attention_norm): InternLM2RMSNorm()
+            (ffn_norm): InternLM2RMSNorm()
+          )
+        )
+        (norm): InternLM2RMSNorm()
+      )
+      (output): Linear(in_features=2048, out_features=92544, bias=False)
+    )
+  )
+  (llm_decoder): Linear(in_features=2048, out_features=6564, bias=True)
+  (criterion_ce): LabelSmoothingLoss(
+    (criterion): KLDivLoss()
+  )
+  (speech_embedding): Embedding(6564, 2048)
+)
+"""
 class InternLM2LM(torch.nn.Module):
     def __init__(
             self,

@@ -19,8 +19,8 @@ import time
 from torch.nn import functional as F
 from contextlib import nullcontext
 import uuid
-from cosyvoice.utils.common import fade_in_out
-from cosyvoice.utils.file_utils import convert_onnx_to_trt
+from tts.utils.common import fade_in_out
+from tts.utils.file_utils import convert_onnx_to_trt
 
 
 class CosyVoiceModel:
