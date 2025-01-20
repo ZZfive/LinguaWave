@@ -32,10 +32,10 @@ from tts.transformer.attention import (MultiHeadedAttention,
                                              RelPositionMultiHeadedAttention)
 from tts.transformer.embedding import EspnetRelPositionalEncoding
 from tts.transformer.subsampling import LegacyLinearNoSubsampling
-from tts.llm.llm import TransformerLM, Qwen2LM
+from tts.llm.llm import TransformerLM, Qwen2LM, InternLM2LM
 from tts.flow.flow import MaskedDiffWithXvec, CausalMaskedDiffWithXvec
 from tts.hifigan.generator import HiFTGenerator
-from tts.cli.model import CosyVoiceModel, CosyVoice2Model
+from tts.cli.model import CosyVoiceModel, CosyVoice2Model, CosyVoice2ModelOtherLLM
 
 
 COSYVOICE_ACTIVATION_CLASSES = {
@@ -80,4 +80,6 @@ def get_model_type(configs):
         return CosyVoiceModel
     if isinstance(configs['llm'], Qwen2LM) and isinstance(configs['flow'], CausalMaskedDiffWithXvec) and isinstance(configs['hift'], HiFTGenerator):
         return CosyVoice2Model
+    if isinstance(configs['llm'], InternLM2LM) and isinstance(configs['flow'], CausalMaskedDiffWithXvec) and isinstance(configs['hift'], HiFTGenerator):
+        return CosyVoice2ModelOtherLLM
     raise TypeError('No valid model type found!')

@@ -399,3 +399,17 @@ class CosyVoice2Model(CosyVoiceModel):
             self.tts_speech_token_dict.pop(this_uuid)
             self.llm_end_dict.pop(this_uuid)
         torch.cuda.empty_cache()
+
+
+class CosyVoice2ModelOtherLLM(CosyVoice2Model):
+
+    def load(self, llm_model, flow_model, hift_model, llm_not_loaded: bool = False):
+        if not llm_not_loaded:
+            self.llm.load_state_dict(torch.load(llm_model, map_location=self.device), strict=True)
+        self.llm.to(self.device).eval()
+        self.flow.load_state_dict(torch.load(flow_model, map_location=self.device), strict=True)
+        self.flow.to(self.device).eval()
+        # in case hift_model is a hifigan model
+        hift_state_dict = {k.replace('generator.', ''): v for k, v in torch.load(hift_model, map_location=self.device).items()}
+        self.hift.load_state_dict(hift_state_dict, strict=True)
+        self.hift.to(self.device).eval()
