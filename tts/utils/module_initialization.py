@@ -1,7 +1,7 @@
 import os
 import sys
-sys.path.append("/home/dbt/zjy/mll/LinguaWave")
-sys.path.append("/home/dbt/zjy/CosyVoice/third_party/Matcha-TTS")
+sys.path.append("~/LinguaWave")
+sys.path.append("/the/path/to/third_party/Matcha-TTS")
 from functools import partial
 from typing import List
 
@@ -154,7 +154,7 @@ if __name__ == "__main__":
     llm_type = "internlm2"
     llm_input_size = 2048
     llm_output_size = 2048
-    llm_pretrain_path = "/home/dbt/zjy/mll/weights/internlm2_5-1_8b"
+    llm_pretrain_path = "~/weights/internlm2_5-1_8b"
     lm = initialize_llm(llm_type, llm_input_size, llm_output_size, llm_pretrain_path)
     print(lm)
 

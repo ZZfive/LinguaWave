@@ -321,9 +321,9 @@ def get_internlm_tokenizer(
 
 
 if __name__ == '__main__':
-    tokenizer = get_qwen_tokenizer(token_path='/home/dbt/zjy/CosyVoice/pretrained_models/v2/CosyVoice2-0.5B/CosyVoice-BlankEN',
+    tokenizer = get_qwen_tokenizer(token_path='/the/path/to/CosyVoice2-0.5B/CosyVoice-BlankEN',
                                    skip_special_tokens=True)
-    # tokenizer = get_internlm_tokenizer(token_path='/home/dbt/zjy/mll/weights/internlm2_5-1_8b', skip_special_tokens=True)
+    # tokenizer = get_internlm_tokenizer(token_path='~/weights/internlm2_5-1_8b', skip_special_tokens=True)
     tokens_ids = tokenizer.encode('hello world')
     print(tokens_ids)
     print(tokenizer.decode(tokens_ids))
