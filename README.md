@@ -23,11 +23,16 @@ utils中放一些工具函数
 
 &emsp;&emsp;CosyVoice系列模型中推理过程主要包括三个模块，分别是llm模块、flow模块和hift模块，llm模块可简单理解为将文本和语音对齐，然后预测speech tokens，flow模块是基于预测的speech tokens转换而来的特征向量生成音频mel谱图，hift则是将mel谱图转换为音频。此外，还有一个用于从音频中提取speech tokens的speech tokenizer模块。目前的想法是从头对llm模块和flow模块进行训练，而speech tokenizer和hift模块可以直接复用CosyVoice项目中提供的预训练模型。CosyVoice模型的详细解析见此文档[CosyVoice.md](asserts/CosyVoice.md)
 
+&emsp;&emsp;通过进一步对CosyVoice项目中提供的训练数据处理和训练相关代码分析，了解llm模块和flow模块是分开单独训练，从公布的信息上来看，替换llm模块应该不影响flow模块的性能。考虑到数据收集和训练资源限制等问题，先只对llm模块进行复现，后续条件、资源允许的情况下再尝试对flow模块进行复现。
+
 待办事项
- - [ ] 先基于CosyVoice项目公布的信息，使用libritts数据集对原始CosyVoice模型中的llm模块和flow模块从头开始训练，了解熟悉训练数据构建、模型构建、模型训练全过程
+ - [ ] 参考CosyVoice项目公布的信息，基于libritts数据集构建llm模块训练数据集
+ - [ ] 参考CosyVoice项目公布的信息，尝试使用其他LLM模块作为llm模块
+   - [x] 自定义CosyVoice2OtherLLM模块，并成功尝试使用Internlm2.5-1_5B作为llm模块完成音频预测推理过程
+ - [ ] 参考CosyVoice项目公布的信息，先尝试构建单纯TTS的训练代码，基于libritts数据集训练，从头训练llm模块
+   - [x] 性能测试
  - [ ] 收集更多数据，构建更丰富的训练数据集和sft数据集
- - [ ] 基于构建的数据集，使用新的LLM模型替换CosyVoice项目中的llm模块，从头训练llm模块和flow模块
- - [ ] 将各个模块组合，构建可推理的完成模型
+ - [ ] 若CosyVoice2公布训练代码，基于其继续训练
 
 ## 音频大语言模型
 To be continued...
