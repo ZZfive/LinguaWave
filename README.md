@@ -30,7 +30,7 @@ utils中放一些工具函数
  - [ ] 参考CosyVoice项目公布的信息，尝试使用其他LLM模块作为llm模块
    - [x] 自定义CosyVoice2OtherLLM模块，并成功尝试使用Internlm2.5-1_5B作为llm模块完成音频预测推理过程
  - [ ] 参考CosyVoice项目公布的信息，先尝试构建单纯TTS的训练代码，基于libritts数据集训练，从头训练llm模块
-   - [x] 性能测试
+   - [ ] 性能测试
  - [ ] 收集更多数据，构建更丰富的训练数据集和sft数据集
  - [ ] 若CosyVoice2公布训练代码，基于其继续训练
 
