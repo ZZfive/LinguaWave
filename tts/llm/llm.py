@@ -524,7 +524,7 @@ class InternLM2LM(torch.nn.Module):
         device = text.device
         text = torch.concat([prompt_text, text], dim=1)  # 参考音频对应的文本prompt_text和输入目标文本text拼接
         text_len += prompt_text_len
-        text = self.llm.model.model.embed_tokens(text)  # 用Qwen2Encoder对象中的embedding层进行文本特征，[1, text_len, llm_input_size]，如[1, 8, 2048]
+        text = self.llm.model.model.tok_embeddings(text)  # 用Qwen2Encoder对象中的embedding层进行文本特征，[1, text_len, llm_input_size]，如[1, 8, 2048]
 
         # 2. encode embedding
         embedding = torch.zeros(1, 0, self.llm_input_size, dtype=text.dtype).to(device).to(text.dtype)  # [1, 0, 2048]；与cosyvoice中不同，cosyvoice2在speech tokens预测时不使用说话人embedding
