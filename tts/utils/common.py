@@ -173,5 +173,5 @@ def mask_to_bias(mask: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
     # attention mask bias
     # NOTE(Mddct): torch.finfo jit issues
     #     chunk_masks = (1.0 - chunk_masks) * torch.finfo(dtype).min
-    mask = (1.0 - mask) * torch.finfo(dtype).min  # 将mask取反，并乘以最小浮点值，以实现注意力掩码的效果
+    mask = (1.0 - mask) * -1.0e+10
     return mask

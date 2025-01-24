@@ -11,18 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from functools import partial
-import json
-import onnxruntime
-import torch
-import numpy as np
-import whisper
-from typing import Callable
-import torchaudio.compliance.kaldi as kaldi
-import torchaudio
 import os
 import re
+import json
+from functools import partial
+from typing import Callable, Generator
+
+import torch
+import whisper
 import inflect
+import onnxruntime
+import numpy as np
+import torchaudio
+import torchaudio.compliance.kaldi as kaldi
 try:
     import ttsfrd
     use_ttsfrd = True
@@ -31,6 +32,8 @@ except ImportError:
     from tn.chinese.normalizer import Normalizer as ZhNormalizer
     from tn.english.normalizer import Normalizer as EnNormalizer
     use_ttsfrd = False
+
+from tts.utils.file_utils import logging
 from tts.utils.frontend_utils import contains_chinese, replace_blank, replace_corner_mark, remove_bracket, spell_out_number, split_paragraph, is_only_punctuation
 
 
@@ -70,12 +73,23 @@ class CosyVoiceFrontEnd:
             self.zh_tn_model = ZhNormalizer(remove_erhua=False, full_to_half=False, overwrite_cache=True)
             self.en_tn_model = EnNormalizer()
             self.inflect_parser = inflect.engine()
-
+    
     def _extract_text_token(self, text):
-        text_token = self.tokenizer.encode(text, allowed_special=self.allowed_special)  # 分词，文本转为ids序列
-        text_token = torch.tensor([text_token], dtype=torch.int32).to(self.device)
-        text_token_len = torch.tensor([text_token.shape[1]], dtype=torch.int32).to(self.device)
-        return text_token, text_token_len
+        if isinstance(text, Generator):
+            logging.info('get tts_text generator, will return _extract_text_token_generator!')
+            # NOTE add a dummy text_token_len for compatibility
+            return self._extract_text_token_generator(text), torch.tensor([0], dtype=torch.int32).to(self.device)
+        else:
+            text_token = self.tokenizer.encode(text, allowed_special=self.allowed_special)
+            text_token = torch.tensor([text_token], dtype=torch.int32).to(self.device)
+            text_token_len = torch.tensor([text_token.shape[1]], dtype=torch.int32).to(self.device)
+            return text_token, text_token_len
+
+    def _extract_text_token_generator(self, text_generator):
+        for text in text_generator:
+            text_token, _ = self._extract_text_token(text)
+            for i in range(text_token.shape[1]):
+                yield text_token[:, i: i + 1]
 
     def _extract_speech_token(self, speech):
         assert speech.shape[1] / 16000 <= 30, 'do not support extract speech token for audio longer than 30s'  # 限制音频长度不超过30s
@@ -107,6 +121,9 @@ class CosyVoiceFrontEnd:
         return speech_feat, speech_feat_len
 
     def text_normalize(self, text, split=True, text_frontend=True):
+        if isinstance(text, Generator):
+            logging.info('get tts_text generator, will skip text_normalize!')
+            return [text]
         if text_frontend is False:
             return [text] if split is True else text
         text = text.strip()
