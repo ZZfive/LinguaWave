@@ -5,6 +5,7 @@
  - [项目结构](#项目结构)
  - [语音生成](#语音生成)
  - [音频大语言模型](#音频大语言模型)
+ - [可用数据集](#可用数据集)
 
 
 ## 简介
@@ -36,3 +37,7 @@ utils中放一些工具函数
 
 ## 音频大语言模型
 To be continued...
+
+## 可用数据集
+ - [Emilia](https://huggingface.co/datasets/amphion/Emilia-Dataset)
+ - [VoiceAssistant-400K](https://huggingface.co/datasets/gpt-omni/VoiceAssistant-400K)
