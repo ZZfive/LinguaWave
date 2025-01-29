@@ -39,5 +39,6 @@ utils中放一些工具函数
 To be continued...
 
 ## 可用数据集
+ - [LibriTTS](www.openslr.org/resources/60)
  - [Emilia](https://huggingface.co/datasets/amphion/Emilia-Dataset)
  - [VoiceAssistant-400K](https://huggingface.co/datasets/gpt-omni/VoiceAssistant-400K)

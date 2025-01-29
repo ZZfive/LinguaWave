@@ -19,7 +19,7 @@ def main():
             continue
         with open(txt) as f:
             content = ''.join(l.replace('\n', '') for l in f.readline())  # 读取文本文件
-        utt = os.path.basename(wav).replace('.wav', '')  # 获取utt，就是不带文件格式后缀的文件名
+        utt = os.path.basename(wav).replace('.wav', '')  # 获取utt，就是不带文件格式后缀的音频文件名
         spk = utt.split('_')[0]  # 获取说话人id，utt的第一个下划线前的字符串
         utt2wav[utt] = wav  # wav文件路径
         utt2text[utt] = content  # 文本
