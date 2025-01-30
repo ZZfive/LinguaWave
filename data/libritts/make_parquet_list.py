@@ -85,15 +85,15 @@ if __name__ == "__main__":
         for l in f:
             l = l.replace('\n', '').split()
             utt2spk[l[0]] = l[1]
-    utt2embedding = torch.load('{}/utt2embedding.pt'.format(args.src_dir))
-    spk2embedding = torch.load('{}/spk2embedding.pt'.format(args.src_dir))
-    utt2speech_token = torch.load('{}/utt2speech_token.pt'.format(args.src_dir))
+    utt2embedding = torch.load('{}/utt2embedding.pt'.format(args.src_dir))  # 加载之前处理得到的utt对应的embedding向量，shape为[1,192]
+    spk2embedding = torch.load('{}/spk2embedding.pt'.format(args.src_dir))  # 加载之前处理得到的spk对应的embedding向量，shape为[1,192]
+    utt2speech_token = torch.load('{}/utt2speech_token.pt'.format(args.src_dir))  # 加载之前处理得到的每条utt中文本对应的speech tokens序列
     utts = list(utt2wav.keys())  # 获取所有utt
 
     # Using process pool to speedup
     pool = multiprocessing.Pool(processes=args.num_processes)  # 创建进程池
     parquet_list, utt2parquet_list, spk2parquet_list = [], [], []  # 用于收集结果
-    for i, j in enumerate(range(0, len(utts), args.num_utts_per_parquet)):
+    for i, j in enumerate(range(0, len(utts), args.num_utts_per_parquet)):  # 每1000个utt创建一个parquet文件
         parquet_file = os.path.join(args.des_dir, 'parquet_{:09d}.tar'.format(i))  # 创建parquet文件，每个parquet文件包含args.num_utts_per_parquet个utt
         utt2parquet_file = os.path.join(args.des_dir, 'utt2parquet_{:09d}.json'.format(i))
         spk2parquet_file = os.path.join(args.des_dir, 'spk2parquet_{:09d}.json'.format(i))
