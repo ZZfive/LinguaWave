@@ -114,7 +114,7 @@ class DistributedSampler:  # 分布式采样器，用于在分布式训练中对
 class DataList(IterableDataset):
 
     def __init__(self, lists, shuffle=True, partition=True):
-        self.lists = lists  # 数据列表
+        self.lists = lists  # 数据列表，就是tar文件列表
         self.sampler = DistributedSampler(shuffle, partition)  # 创建分布式采样器
 
     def set_epoch(self, epoch):
@@ -126,7 +126,7 @@ class DataList(IterableDataset):
         for index in indexes:
             data = dict(src=self.lists[index])  # 创建一个包含数据源和索引的字典，key为"src"，value为self.lists[index]
             data.update(sampler_info)  # 将分布式训练环境信息添加到数据中
-            yield data  # 一次只返回一个数据，数据量小，适合流式处理
+            yield data  # 一次只返回一个数据，数据量小，适合流式处理；此处返回的就是一个tar文件，其中包含的数据数量由数据预处理时决定，目前是1000
 
 
 def Dataset(data_list_file,
@@ -149,7 +149,7 @@ def Dataset(data_list_file,
             partition(bool): whether to do data partition in terms of rank
     """
     assert mode in ['train', 'inference']
-    lists = read_lists(data_list_file)
+    lists = read_lists(data_list_file)  # 读取数据列表，就是tar文件列表
     if mode == 'inference':  # 推理模式
         with open(tts_file) as f:
             tts_data = json.load(f)

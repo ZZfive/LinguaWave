@@ -26,6 +26,24 @@ import pyworld as pw
 AUDIO_FORMAT_SETS = {'flac', 'mp3', 'm4a', 'ogg', 'opus', 'wav', 'wma'}
 
 
+'''
+返回的sample：
+{
+    "src": "path/to/tar/file.tar",  # 当前数据所属的tar文件的路径
+    "rank": 0,  # 当前数据所属的进程的rank
+    "world_size": 1,  # 当前数据所属的进程的world_size
+    "worker_id": 0,  # 当前数据所属的进程的worker_id
+    "num_workers": int,  # 当前数据所属的进程的num_workers
+    "utt": str,  # 当前数据对应的utt
+    "wav": str,  # 当前数据对应的wav文件路径
+    "audio_data": bytes,  # 当前数据对应的二进制音频数据
+    "text": str,  # 当前数据音频对应的文本
+    "spk": str,  # 当前数据音频的说话人
+    "utt_embedding": np.ndarray,  # 当前数据音频的utt_embedding
+    "spk_embedding": np.ndarray,  # 当前数据音频的spk_embedding
+    "speech_token": np.ndarray,  # 当前数据从音频中提取出的speech_token
+}
+'''
 def parquet_opener(data, mode='train', tts_data={}):
     """ Give url or local file, return file descriptor
         Inplace operation.
@@ -36,19 +54,19 @@ def parquet_opener(data, mode='train', tts_data={}):
         Returns:
             Iterable[{src, stream}]
     """
-    for sample in data:
+    for sample in data:  # 此处的data是dataset.py中的DataList类中的__iter__方法返回的数据，即一个个tar文件
         assert 'src' in sample
-        url = sample['src']
+        url = sample['src']  # url是tar文件的路径
         try:
-            for df in pq.ParquetFile(url).iter_batches(batch_size=64):
-                df = df.to_pandas()
-                for i in range(len(df)):
+            for df in pq.ParquetFile(url).iter_batches(batch_size=64):  # 读取tar文件中的数据，batch_size=64，即每次读取64行数据
+                df = df.to_pandas()  # 将数据转换为pandas的DataFrame格式
+                for i in range(len(df)):  # 遍历DataFrame中的每一行数据
                     if mode == 'inference' and df.loc[i, 'utt'] not in tts_data:
                         continue
-                    sample.update(dict(df.loc[i]))
+                    sample.update(dict(df.loc[i]))  # 将DataFrame中的每一行数据更新到sample中
                     if mode == 'train':
                         # NOTE do not return sample directly, must initialize a new dict
-                        yield {**sample}
+                        yield {**sample}  # 返回更新后的sample
                     else:
                         for index, text in enumerate(tts_data[df.loc[i, 'utt']]):
                             yield {**sample, 'tts_index': index, 'tts_text': text}
@@ -56,6 +74,27 @@ def parquet_opener(data, mode='train', tts_data={}):
             logging.warning('Failed to open {}, ex info {}'.format(url, ex))
 
 
+'''
+返回的sample：
+{
+    "src": "path/to/tar/file.tar",  # 当前数据所属的tar文件的路径
+    "rank": 0,  # 当前数据所属的进程的rank
+    "world_size": 1,  # 当前数据所属的进程的world_size
+    "worker_id": 0,  # 当前数据所属的进程的worker_id
+    "num_workers": int,  # 当前数据所属的进程的num_workers
+    "utt": str,  # 当前数据对应的utt
+    "wav": str,  # 当前数据对应的wav文件路径
+    "audio_data": bytes,  # 当前数据对应的二进制音频数据
+    "text": str,  # 当前数据音频对应的文本
+    "spk": str,  # 当前数据音频的说话人
+    "utt_embedding": np.ndarray,  # 当前数据音频的utt_embedding
+    "spk_embedding": np.ndarray,  # 当前数据音频的spk_embedding
+    "speech_token": np.ndarray,  # 当前数据从音频中提取出的speech_token
+    "text_token": list,  # 当前数据的text中提取出的tokens序列
+    "speech": torch.Tensor,  # 当前数据对应的音频数据
+    "sample_rate": int,  # 当前数据对应的采样率
+}
+'''
 def filter(data,
            max_length=10240,
            min_length=10,
@@ -85,7 +124,7 @@ def filter(data,
             Iterable[{key, wav, label, sample_rate}]
     """
     for sample in data:
-        sample['speech'], sample['sample_rate'] = torchaudio.load(BytesIO(sample['audio_data']))  # 加载音频数据
+        sample['speech'], sample['sample_rate'] = torchaudio.load(BytesIO(sample['audio_data']))  # 加载音频数据，将音频数据和采样率存储在sample['speech']和sample['sample_rate']中
         sample['speech'] = sample['speech'].mean(dim=0, keepdim=True)  # 计算音频数据的平均值
         del sample['audio_data']  # 删除音频数据
         # sample['wav'] is torch.Tensor, we have 100 frames every second
@@ -108,7 +147,28 @@ def filter(data,
         yield sample
 
 
-def resample(data, resample_rate=22050, min_sample_rate=16000, mode='train'):
+'''
+返回的sample：
+{
+    "src": "path/to/tar/file.tar",  # 当前数据所属的tar文件的路径
+    "rank": 0,  # 当前数据所属的进程的rank
+    "world_size": 1,  # 当前数据所属的进程的world_size
+    "worker_id": 0,  # 当前数据所属的进程的worker_id
+    "num_workers": int,  # 当前数据所属的进程的num_workers
+    "utt": str,  # 当前数据对应的utt
+    "wav": str,  # 当前数据对应的wav文件路径
+    "audio_data": bytes,  # 当前数据对应的二进制音频数据
+    "text": str,  # 当前数据音频对应的文本
+    "spk": str,  # 当前数据音频的说话人
+    "utt_embedding": np.ndarray,  # 当前数据音频的utt_embedding
+    "spk_embedding": np.ndarray,  # 当前数据音频的spk_embedding
+    "speech_token": np.ndarray,  # 当前数据从音频中提取出的speech_token
+    "text_token": list,  # 当前数据的text中提取出的tokens序列
+    "speech": torch.Tensor,  # 当前数据对应的音频数据
+    "sample_rate": int,  # 当前数据对应的采样率
+}
+'''
+def resample(data, resample_rate=22050, min_sample_rate=16000, mode='train'):  # 重采样
     """ Resample data.
         Inplace operation.
 
@@ -157,6 +217,28 @@ def truncate(data, truncate_length=24576, mode='train'):
         yield sample
 
 
+'''
+返回的sample：
+{
+    "src": "path/to/tar/file.tar",  # 当前数据所属的tar文件的路径
+    "rank": 0,  # 当前数据所属的进程的rank
+    "world_size": 1,  # 当前数据所属的进程的world_size
+    "worker_id": 0,  # 当前数据所属的进程的worker_id
+    "num_workers": int,  # 当前数据所属的进程的num_workers
+    "utt": str,  # 当前数据对应的utt
+    "wav": str,  # 当前数据对应的wav文件路径
+    "audio_data": bytes,  # 当前数据对应的二进制音频数据
+    "text": str,  # 当前数据音频对应的文本
+    "spk": str,  # 当前数据音频的说话人
+    "utt_embedding": np.ndarray,  # 当前数据音频的utt_embedding
+    "spk_embedding": np.ndarray,  # 当前数据音频的spk_embedding
+    "speech_token": np.ndarray,  # 当前数据从音频中提取出的speech_token
+    "text_token": list,  # 当前数据的text中提取出的tokens序列
+    "speech": torch.Tensor,  # 当前数据对应的音频数据
+    "sample_rate": int,  # 当前数据对应的采样率
+    "speech_feat": torch.Tensor,  # 当前数据对应的mel谱图特征
+}
+'''
 def compute_fbank(data,
                   feat_extractor,
                   mode='train'):
@@ -204,6 +286,28 @@ def compute_f0(data, sample_rate, hop_size, mode='train'):
         yield sample
 
 
+'''
+返回的sample：
+{
+    "src": "path/to/tar/file.tar",  # 当前数据所属的tar文件的路径
+    "rank": 0,  # 当前数据所属的进程的rank
+    "world_size": 1,  # 当前数据所属的进程的world_size
+    "worker_id": 0,  # 当前数据所属的进程的worker_id
+    "num_workers": int,  # 当前数据所属的进程的num_workers
+    "utt": str,  # 当前数据对应的utt
+    "wav": str,  # 当前数据对应的wav文件路径
+    "audio_data": bytes,  # 当前数据对应的二进制音频数据
+    "text": str,  # 当前数据音频对应的文本
+    "spk": str,  # 当前数据音频的说话人
+    "utt_embedding": torch.Tensor,  # 当前数据音频的utt_embedding
+    "spk_embedding": torch.Tensor,  # 当前数据音频的spk_embedding
+    "speech_token": np.ndarray,  # 当前数据从音频中提取出的speech_token
+    "text_token": list,  # 当前数据的text中提取出的tokens序列
+    "speech": torch.Tensor,  # 当前数据对应的音频数据
+    "sample_rate": int,  # 当前数据对应的采样率
+    "speech_feat": torch.Tensor,  # 当前数据对应的mel谱图特征
+}
+'''
 def parse_embedding(data, normalize, mode='train'):
     """ Parse utt_embedding/spk_embedding
 
@@ -222,6 +326,25 @@ def parse_embedding(data, normalize, mode='train'):
         yield sample
 
 
+'''
+返回的sample：
+{
+    "src": "path/to/tar/file.tar",  # 当前数据所属的tar文件的路径
+    "rank": 0,  # 当前数据所属的进程的rank
+    "world_size": 1,  # 当前数据所属的进程的world_size
+    "worker_id": 0,  # 当前数据所属的进程的worker_id
+    "num_workers": int,  # 当前数据所属的进程的num_workers
+    "utt": str,  # 当前数据对应的utt
+    "wav": str,  # 当前数据对应的wav文件路径
+    "audio_data": bytes,  # 当前数据对应的二进制音频数据
+    "text": str,  # 当前数据音频对应的文本
+    "spk": str,  # 当前数据音频的说话人
+    "utt_embedding": np.ndarray,  # 当前数据音频的utt_embedding
+    "spk_embedding": np.ndarray,  # 当前数据音频的spk_embedding
+    "speech_token": np.ndarray,  # 当前数据从音频中提取出的speech_token
+    "text_token": list,  # 当前数据的text中提取出的tokens序列
+}
+'''
 def tokenize(data, get_tokenizer, allowed_special, mode='train'):
     """ Decode text to chars or BPE
         Inplace operation
@@ -234,13 +357,35 @@ def tokenize(data, get_tokenizer, allowed_special, mode='train'):
     """
     tokenizer = get_tokenizer()
     for sample in data:
-        assert 'text' in sample
-        sample['text_token'] = tokenizer.encode(sample['text'], allowed_special=allowed_special)
+        assert 'text' in sample  # 此处的sample是从上一个处理函数返回的sample，此处sample来自于parquet_opener
+        sample['text_token'] = tokenizer.encode(sample['text'], allowed_special=allowed_special)  # 将文本分词为tokens序列，并存储在sample['text_token']中
         if mode == 'inference':
             sample['tts_text_token'] = tokenizer.encode(sample['tts_text'], allowed_special=allowed_special)
         yield sample
 
 
+'''
+返回的x：
+{
+    "src": "path/to/tar/file.tar",  # 当前数据所属的tar文件的路径
+    "rank": 0,  # 当前数据所属的进程的rank
+    "world_size": 1,  # 当前数据所属的进程的world_size
+    "worker_id": 0,  # 当前数据所属的进程的worker_id
+    "num_workers": int,  # 当前数据所属的进程的num_workers
+    "utt": str,  # 当前数据对应的utt
+    "wav": str,  # 当前数据对应的wav文件路径
+    "audio_data": bytes,  # 当前数据对应的二进制音频数据
+    "text": str,  # 当前数据音频对应的文本
+    "spk": str,  # 当前数据音频的说话人
+    "utt_embedding": torch.Tensor,  # 当前数据音频的utt_embedding
+    "spk_embedding": torch.Tensor,  # 当前数据音频的spk_embedding
+    "speech_token": np.ndarray,  # 当前数据从音频中提取出的speech_token
+    "text_token": list,  # 当前数据的text中提取出的tokens序列
+    "speech": torch.Tensor,  # 当前数据对应的音频数据
+    "sample_rate": int,  # 当前数据对应的采样率
+    "speech_feat": torch.Tensor,  # 当前数据对应的mel谱图特征
+}
+'''
 def shuffle(data, shuffle_size=10000, mode='train'):
     """ Local shuffle the data
 
@@ -254,17 +399,39 @@ def shuffle(data, shuffle_size=10000, mode='train'):
     buf = []
     for sample in data:
         buf.append(sample)
-        if len(buf) >= shuffle_size:
+        if len(buf) >= shuffle_size:  # 如果buf中的样本数量大于shuffle_size，则随机打乱buf中的样本，并返回打乱后的样本
             random.shuffle(buf)
             for x in buf:
                 yield x
-            buf = []
-    # The sample left over
+            buf = []  # 清空buf, 准备下一次打乱
+    # The sample left over，对剩下的样本进行打乱
     random.shuffle(buf)
     for x in buf:
         yield x
 
 
+'''
+返回的x：
+{
+    "src": "path/to/tar/file.tar",  # 当前数据所属的tar文件的路径
+    "rank": 0,  # 当前数据所属的进程的rank
+    "world_size": 1,  # 当前数据所属的进程的world_size
+    "worker_id": 0,  # 当前数据所属的进程的worker_id
+    "num_workers": int,  # 当前数据所属的进程的num_workers
+    "utt": str,  # 当前数据对应的utt
+    "wav": str,  # 当前数据对应的wav文件路径
+    "audio_data": bytes,  # 当前数据对应的二进制音频数据
+    "text": str,  # 当前数据音频对应的文本
+    "spk": str,  # 当前数据音频的说话人
+    "utt_embedding": torch.Tensor,  # 当前数据音频的utt_embedding
+    "spk_embedding": torch.Tensor,  # 当前数据音频的spk_embedding
+    "speech_token": np.ndarray,  # 当前数据从音频中提取出的speech_token
+    "text_token": list,  # 当前数据的text中提取出的tokens序列
+    "speech": torch.Tensor,  # 当前数据对应的音频数据
+    "sample_rate": int,  # 当前数据对应的采样率
+    "speech_feat": torch.Tensor,  # 当前数据对应的mel谱图特征
+}
+'''
 def sort(data, sort_size=500, mode='train'):
     """ Sort the data by feature length.
         Sort is used after shuffle and before batch, so we can group
@@ -283,12 +450,12 @@ def sort(data, sort_size=500, mode='train'):
     for sample in data:
         buf.append(sample)
         if len(buf) >= sort_size:
-            buf.sort(key=lambda x: x['speech_feat'].size(0))  # 根据speech_feat的长度排序
+            buf.sort(key=lambda x: x['speech_feat'].size(0))  # 根据数据中的speech_feat的长度从大到小排序
             for x in buf:
                 yield x
             buf = []
-    # The sample left over
-    buf.sort(key=lambda x: x['speech_feat'].size(0))  # 根据speech_feat的长度排序
+    # The sample left over, 对剩下的样本进行排序
+    buf.sort(key=lambda x: x['speech_feat'].size(0))
     for x in buf:
         yield x
 
@@ -312,7 +479,31 @@ def static_batch(data, batch_size=16):
     if len(buf) > 0:  # 返回最后一批数量不足batch_size的数据
         yield buf
 
-
+'''
+返回的buf：
+[
+    {
+        "src": "path/to/tar/file.tar",  # 当前数据所属的tar文件的路径
+        "rank": 0,  # 当前数据所属的进程的rank
+        "world_size": 1,  # 当前数据所属的进程的world_size
+        "worker_id": 0,  # 当前数据所属的进程的worker_id
+        "num_workers": int,  # 当前数据所属的进程的num_workers
+        "utt": str,  # 当前数据对应的utt
+        "wav": str,  # 当前数据对应的wav文件路径
+        "audio_data": bytes,  # 当前数据对应的二进制音频数据
+        "text": str,  # 当前数据音频对应的文本
+        "spk": str,  # 当前数据音频的说话人
+        "utt_embedding": torch.Tensor,  # 当前数据音频的utt_embedding
+        "spk_embedding": torch.Tensor,  # 当前数据音频的spk_embedding
+        "speech_token": np.ndarray,  # 当前数据从音频中提取出的speech_token
+        "text_token": list,  # 当前数据的text中提取出的tokens序列
+        "speech": torch.Tensor,  # 当前数据对应的音频数据
+        "sample_rate": int,  # 当前数据对应的采样率
+        "speech_feat": torch.Tensor,  # 当前数据对应的mel谱图特征
+    },
+    ...
+]
+'''
 def dynamic_batch(data, max_frames_in_batch=12000, mode='train'):
     """ Dynamic batch the data until the total frames in batch
         reach `max_frames_in_batch`
@@ -356,6 +547,24 @@ def batch(data, batch_type='static', batch_size=16, max_frames_in_batch=12000, m
             logging.fatal('Unsupported batch type {}'.format(batch_type))
 
 
+'''
+返回的batch，设batch_size为bs：
+{
+    "utts": List[str],  # 当前batch中所有音频的utt
+    "speech": torch.Tensor,  # 当前batch中所有音频的speech, shape为[bs, 当前batch中所有音频的speech最长长度]
+    "speech_len": torch.Tensor,  # 当前batch中所有音频的speech长度, shape为[bs]
+    "speech_token": torch.Tensor,  # 当前batch中所有音频的speech_tokens, shape为[bs, 当前batch中所有音频的speech_tokens最长长度]
+    "speech_token_len": torch.Tensor,  # 当前batch中所有音频的speech_tokens长度, shape为[bs]
+    "speech_feat": torch.Tensor,  # 当前batch中所有音频的speech_feats, shape为[bs, 当前batch中所有音频的speech_feats最长长度, 80]
+    "speech_feat_len": torch.Tensor,  # 当前batch中所有音频的speech_feats长度, shape为[bs]
+    "text": List[str],  # 当前batch中所有音频的text
+    "text_token": torch.Tensor,  # 当前batch中所有音频对应的的text_tokens序列, shape为[bs, 当前batch中所有音频的text_tokens最长长度]
+    "text_token_len": torch.Tensor,  # 当前batch中所有音频对应的text_tokens长度, shape为[bs]
+    "utt_embedding": torch.Tensor,  # 当前batch中所有音频的utt_embedding, shape为[bs, 192]
+    "spk_embedding": torch.Tensor,  # 当前batch中所有音频的spk_embedding, shape为[bs, 192]
+    "embedding": torch.Tensor,  # 当前batch中所有音频的embedding, shape为[bs, 192]
+}
+'''
 def padding(data, use_spk_embedding, mode='train', gan=False):
     """ Padding the data into training data
 
@@ -366,10 +575,10 @@ def padding(data, use_spk_embedding, mode='train', gan=False):
             Iterable[Tuple(keys, feats, labels, feats lengths, label lengths)]
     """
     for sample in data:
-        assert isinstance(sample, list)  # 此处的sample是batch函数返回的一个batch
+        assert isinstance(sample, list)  # 此处的sample是batch函数返回的一个batch，sample为List[Dict]
         speech_feat_len = torch.tensor([x['speech_feat'].size(1) for x in sample],
                                        dtype=torch.int32)  # 获取当前batch中所有音频mel谱图特征的长度
-        order = torch.argsort(speech_feat_len, descending=True)  # 根据mel谱图特征的长度排序
+        order = torch.argsort(speech_feat_len, descending=True)  # 根据mel谱图特征的长度排序，从大到小
 
         utts = [sample[i]['utt'] for i in order]  # 获取当前batch中所有音频的utt
         speech = [sample[i]['speech'].squeeze(dim=0) for i in order]  # 获取当前batch中所有音频的speech
@@ -389,8 +598,8 @@ def padding(data, use_spk_embedding, mode='train', gan=False):
         text_token = [torch.tensor(sample[i]['text_token']) for i in order]  # 获取当前batch中所有音频的text_token序列
         text_token_len = torch.tensor([i.size(0) for i in text_token], dtype=torch.int32)  # 获取当前batch中所有音频的text_token序列长度
         text_token = pad_sequence(text_token, batch_first=True, padding_value=0)  # 将当前batch中所有音频的text_token序列填充到同一长度
-        utt_embedding = torch.stack([sample[i]['utt_embedding'] for i in order], dim=0)
-        spk_embedding = torch.stack([sample[i]['spk_embedding'] for i in order], dim=0)
+        utt_embedding = torch.stack([sample[i]['utt_embedding'] for i in order], dim=0)  # 将当前batch中所有音频的utt_embedding堆叠到同一维度
+        spk_embedding = torch.stack([sample[i]['spk_embedding'] for i in order], dim=0)  # 将当前batch中所有音频的spk_embedding堆叠到同一维度
         batch = {
             "utts": utts,
             "speech": speech,
