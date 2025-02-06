@@ -16,8 +16,7 @@
 &emsp;&emsp;GLM-4-Voice和CosyVoice的主体架构基本一致，使用Flow matching训练是借鉴[Matcha-TTS](https://github.com/shivammehta25/Matcha-TTS)。GLM-4-Voice和CosyVoice本质都是通过训练将文本和语音在隐空间中对齐，但CosyVoice是将文本映射到音频的隐空间，LLM模块只会预测speech token，GLM-4-Voice则更接近mini-omni，隐空间是文本和音频共存的，LLM模块会同时预测text token和speech token。从实现难易度来看，CosyVoice更容易复现，因为CosyVoice项目中提供了训练代码，目前公布了CosyVoice的训练代码，CosyVoice2还未公布，GLM-4-Voice应该是不会公布训练代码。目前的项目是先尝试在小批量数据上复现类CosyVoice2架构模型训练，再尝试复现类GLM-4-Voice模型。
 
 ## 项目结构
-data中放数据构建相关的代码，先包含cosyvoice中提供的libritts数据集预处理相关函数
-utils中放一些工具函数
+To be continued...
 
 ## 语音生成
 &emsp;&emsp;基于CosyVoice项目公布的信息对CosyVoice进行SFT或全量训练应该问题不大，但CosyVoice2中将LM模块简化为Qwen架构，并且优化了speech tokenizer，基于其进行复现的价值应该更大，故目前是想将Qwen架构的LLM模块用其他的LLM模型替换，如Internlm或Llama等，通过训练复现类CosyVoice2架构的语音生成模型，既证明CosyVoice工作的有效性，也提高个人对多模态LLM，音频生成等方面的理解。
@@ -28,6 +27,7 @@ utils中放一些工具函数
 
 待办事项
  - [ ] 参考CosyVoice项目公布的信息，基于libritts数据集构建llm模块训练数据集
+   - [x] 按CosyVoice-300M-25Hz模型的cosyvoice.yaml文件分析了数据处理各阶段，详细信息见文件[tts/dataset/processor.py](tts/dataset/processor.py)
  - [ ] 参考CosyVoice项目公布的信息，尝试使用其他LLM模块作为llm模块
    - [x] 自定义CosyVoice2OtherLLM模块，并成功尝试使用Internlm2.5-1_5B作为llm模块完成音频预测推理过程
  - [ ] 参考CosyVoice项目公布的信息，先尝试构建单纯TTS的训练代码，基于libritts数据集训练，从头训练llm模块
@@ -40,5 +40,6 @@ To be continued...
 
 ## 可用数据集
  - [LibriTTS](www.openslr.org/resources/60)
+ - [Mgaicdata-read](www.openslr.org/resources/68)
  - [Emilia](https://huggingface.co/datasets/amphion/Emilia-Dataset)
  - [VoiceAssistant-400K](https://huggingface.co/datasets/gpt-omni/VoiceAssistant-400K)
