@@ -15,7 +15,7 @@
 # limitations under the License.
 
 import torch
-from cosyvoice.utils.file_utils import logging
+from tts.utils.file_utils import logging
 '''
 def subsequent_mask(
         size: int,
