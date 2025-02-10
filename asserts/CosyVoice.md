@@ -10,7 +10,7 @@
 ### 架构细节
 &emsp;&emsp;在项目入口的[README.md](../README.md)中简短介绍了Cosyvoice架构，具体架构图下图所示。架构图(a)为CosyVoice中提出的以有监督语义tokens通过在编码器后插入Vector Quantizer/向量量化模块的多语言speech tokenizer架构，Vector Quantizer的码本大小为4096。图(a)中的模型本质是阿里内部专用SenseVoice ASR模型的微调版本(类Whisper模型)，虚线部分只在speech tokenizer训练过程中会使用，训练任务就是ASR。训练结束之后图(a)中的$Encoder_1$和Vector Quantizer组合为speech tokenizer，主要用于从音频文件中提取对应的speech tokens序列。
 
-![enter image description here](CosyVoice_structure.png?raw=true)
+![enter image description here](images/CosyVoice_structure.png?raw=true)
 
 &emsp;&emsp;架构图(b)是完整的CosyVoice预览图，从下向上看，输入包括x-Vex v、Text Y和Speech X，其中x-vec v是从音频中提取的说话人特征embedding，Text Y就是CosyVoice推理时设置的文本输入，Speech X就是推理时的音频输入(因为CosyVoice支持音色克隆)。Text Encoder将文本和speech tokens的语音空间对齐，因为Text-to-token LM中本质是speech tokens的隐空间，其预测的也是speech tokens；Speech Tokenizer从音频中提取speech tokens；Text-to-token LM模块主要由Transformer blocks堆叠组成，输出经过Embedding layer转换为与Contional flow matching/CFM模块训练的条件向量，最终预测对应内容的mel谱图特征，然后使用HiFiGAN生成最终音频(上图中没有显示HiFiGAN)。
 
@@ -24,7 +24,7 @@
 
 &emsp;&emsp;CosyVoice具有zeor-shot上下文学习能力，允许仅使用简短参考音频样本复刻任意音色，即音色克隆；但此过程需要仔细构建LM模块的输入序列，如下图所示。图(a)是参考音频语种与目标语种相同时的输入构建方式，图(b)是参考音频语种与目标语种不同时的输入构建方式；主要区别是当语种不一致时，只会使用说话人特征embedding，而不会使用参考音频的文本和音频。
 
-![enter image description here](CosyVoice_input.png?raw=true)
+![enter image description here](images/CosyVoice_input.png?raw=true)
 
 &emsp;&emsp;为了扩展CosyVoice的控制能力，还尝试了额外的指令微调。具体来说，它支持对各种方面的可控性，例如说话者身份（即说话者的特征）、说话风格（包括情感、性别、语速和音高）和细粒度的副语言特征。这些特征包括在笑时插入笑声、呼吸、说话和强调某些单词的能力。
 
@@ -73,7 +73,7 @@
 3. 开发了一个块感知的因果流匹配模型支持各种合成场景，能在单模型推理中启动流式和非流式合成
 
 ### 架构细节
-![enter image description here](CosyVoice2_structure.png?raw=true)
+![enter image description here](images/CosyVoice2_structure.png?raw=true)
 
 &emsp;&emsp;CosyVoice2架构图如上所示，整体结构与CosyVoice变化不大，主要是各个模块内的存在一些细节区别。
 
@@ -91,7 +91,7 @@ $$\mu_i=\sum_{j=0}^{D-1} \bar{h}_{i,j}(2K+1)^j$$
 1. 流式--下图上半部分；LM输入中以一个预定义的比例N:M将文本tokens和音频tokens混合，即每N个文本tokens后面接M个音频tokens。所过下一个token是文本token，则希望模型预测出Filling token，而不是文本token。一旦文本tokens耗尽，turn of speech token和剩余的语音tokens顺序拼接，形成流模式下的混合文本-语音tokens序列。
 2. 非流式--下图下半部分；LM的输入依次由start of sequence token、所有的文本tokens、turn of speech token、所有的音频tokens、end of sequence token组成。
 
-![enter image description here](CosyVoice2_input.png?raw=true)
+![enter image description here](images/CosyVoice2_input.png?raw=true)
 
 &emsp;&emsp;通过同时在以上两种序列上训练text-speech LM，可以在单个统一模型中执行流式和非流式语音生成。
 
@@ -102,7 +102,7 @@ $$\mu_i=\sum_{j=0}^{D-1} \bar{h}_{i,j}(2K+1)^j$$
 3. Chunk-M Mask--延迟和性能之间的权衡，可以利用过去帧和M个未来帧的信息，适合要求第一个chunk生成较快的场景
 4. Chunk-2M Mask--牺牲更多的实时性来获得更好的性能，更接近离线模式
 
-![enter image description here](CosyVoice2_cfm.png?raw=true)
+![enter image description here](images/CosyVoice2_cfm.png?raw=true)
 
 &emsp;&emsp;对于小批量中的每个训练样例，从上述四种掩码中按均匀分布随机采样一个掩码。通过这种方式，一个流匹配模型可以兼容不同的场景，降低部署的复杂性。这种分块感知训练的另一个优点是，具有更多上下文的掩码可以作为具有较少上下文的掩码的教师，是一种隐式的自蒸馏方案。
 
