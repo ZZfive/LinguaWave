@@ -54,9 +54,9 @@
 
 &emsp;&emsp;下图A-E展示了文本tokens和音频tokens生成过程中注意力掩码的逐步编码过程。通过控制文本和音频tokens之间的基于chunk的注意力掩码，能够以实时的方式生成部分音频。
 
-|<img src="images/MiniCPM-o-2-6-speech-decoding-a.png" width="200"><br>图A|<img src="images/MiniCPM-o-2-6-speech-decoding-b.png" width="200"><br>图B|<img src="images/MiniCPM-o-2-6-speech-decoding-c.png" width="200"><br>图C|
+|<img src="images/MiniCPM-o-2-6-speech-decoding-a.png" width="300"><br>图A|<img src="images/MiniCPM-o-2-6-speech-decoding-b.png" width="300"><br>图B|<img src="images/MiniCPM-o-2-6-speech-decoding-c.png" width="300"><br>图C|
 |:---:|:---:|:---:|
-|<img src="images/MiniCPM-o-2-6-speech-decoding-d.png" width="200"><br>图D|<img src="images/MiniCPM-o-2-6-speech-decoding-e.png" width="200"><br>图E||
+|<img src="images/MiniCPM-o-2-6-speech-decoding-d.png" width="300"><br>图D|<img src="images/MiniCPM-o-2-6-speech-decoding-e.png" width="300"><br>图E||
 
 ## 多模态系统提示词
 
