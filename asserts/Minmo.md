@@ -35,6 +35,23 @@ $$Latency=5d_{llm}+15d_{lm}+15d_{syn} \tag1$$
 其中$d_{llm}$LLM预测出单个text token的耗时，$d_{lm}$是voice token LM预测出单个speech token的耗时，$d_{syn}$是token2wav Synthesizer基于单个speech token生成音频的耗时。
 
 ## 任务及训练数据
+&emsp;&emsp;Minmo的训练任务包括四种，分别是Speech-to-Text、Text-to-Speech、Speech-to-Speech和Speech-to-ControlToken，具体详情如下表所示。
 
+![enter image description here](images/Minmo_data.png?raw=true)
+*表1: Minmo训练任务及数据详情*
+
+&emsp;&emsp;Speech-to-Text类型下各种任务的训练数据通过ChatML格式构建，如下所示；其中task_instrcution对应不同任务的自然语言描述，例如Speech Transcription用于语音识别任务，Translate {SRC LANG} into {TGT LANG}用于语音翻译任务；wav_path表示输入音频文件路径，task_output表示每个任务的输出内容
+
+![enter image description here](images/Minmo_ChatML.png?raw=true)
+*图2: ChatML格式案例*
+
+&emsp;&emsp;Text-to-Speech tasks类型任务主要由基于语义合成数据构成，与训练CosyVoice2的数据相同。除了常规数据外，还包含1000小时的受指令控制生成的音频数据。
+
+&emsp;&emsp;Speech-to-Speech任务数据主要来自模拟，包括大约 10,000 小时多轮对话语音和 100 小时风格可控的多轮对话语音。
+
+&emsp;&emsp;Speech-to-ControlToken任务数据包含两个部分，一部分从现有的真实语音交互数据中抽取，另一部分是通过文本对话数据模拟的。构建双工训练数据时，使用启发式规则对样本进行双工标签注释，如下所示
+ - 在assistant回答时，以user轮的endpoint作为起点
+ - 在user talking时，在assistant回答完后的时间间隔T后作为起点，$T \in N(0.6,0.4^2)$
+ - 对于用户的反馈信号（back-channel），从语音交互数据中筛选出用户（将对话中的一方视为用户）无法打断另一方说话的实例，并将其作为用户反馈信号的训练样本
 
 ## 训练
