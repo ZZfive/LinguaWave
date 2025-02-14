@@ -55,3 +55,10 @@ $$Latency=5d_{llm}+15d_{lm}+15d_{syn} \tag1$$
  - 对于用户的反馈信号（back-channel），从语音交互数据中筛选出用户（将对话中的一方视为用户）无法打断另一方说话的实例，并将其作为用户反馈信号的训练样本
 
 ## 训练
+&emsp;&emsp;Minmo通过四个对齐阶段逐步训练，如以下所示；通过四个对齐节点，Minmo获得到端到端的语音理解和生成能力，同时保留了LLM backbone的文本能力，实现低延迟并促进用户的无缝语音聊天体验，类似于 GPT-4o。
+ 1. Speech-to-Text对齐：本阶段使用Speech-to-Text数据将音频输入的隐空间和预训练文本LLM的语义空间对齐，会对图1中的Input Projector和Voice Encoder逐步更新，以及使用Lora更新text LLM。考虑到Voice Encoder和text LLM都预训练模型，但是Input Projector是随机初始化，从数据集中搜集了一个子集，先进行了一次预对齐，只更新Input Projector；此方式能有效防止随机初始化的参数在对齐初始训练阶段对Voice Encoder和text LLM产生较大的梯度影响。预对齐结束后，使用完整的数据对Input Projector和Voice Encoder进行更新，保持text LLM冻结。然后，在使用约130万条包含各类任务的样本进行SFT，通过LoRA的方式更新text LLM，提高基模型的指令跟随能力。
+ 2. Text-to-Speech对齐：本阶段使用Text-to-Speech数据将text LLM的语义空间和音频输出的隐空间对齐，先单独训练Output Projector，然后再联合训练Output Projector和Voice Token LLM，保持其它模块冻结。除了基础的文本到语音（TTS）功能外，利用端到端框架使MinMo能够在语音交互中遵循用户指令，生成更具表现力和娱乐性的音频响应。例如，用户可以通过指令控制音频输出的情感、语速、方言口音或说话风格。构建了约1,000小时的**Instruct Speech Synthesis**数据，其格式如表2所示。
+  ![enter image description here](images/Minmo_t2s_data.png?raw=true)
+*表2: Text-to-Speech Instruct Speech Synthesiss数据例子*
+ 3. Speech-to-Speech对齐：本阶段使用10000小时的成对音频数据，仅训练Output Projector和Voice Token LLM，保持其它模块冻结。语音到语音对齐的训练数据不仅包含通用语音对话，还包括多种设置的音频生成指令，例如采用特定方言、语速和情感的语音对话。发现即使不更新LLM，仅通过利用与小型指令数据集（<150小时）对齐的嵌入，大模型仍能学习到相当有效的音频生成控制能力。
+ 4. Duplex Interactipon对齐：完成以上三个对齐阶段后，Minmo获得了音频理解、音频生成和半双工语音交互能力。在此基础上，进一步添加了一个全双工模块，该模块使用4,000小时的长时人人语音对话数据进行训练。全双工模块以LLM的隐藏层为输入预测模型是否需要生成响应，利用LLM固有的语义理解能力来确定：1）模型是否应响应当前用户查询；2）模型是否应停止正在进行的音频输出以听取用户查询并提供适当的响应。
