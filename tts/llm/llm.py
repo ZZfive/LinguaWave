@@ -348,13 +348,13 @@ class Qwen2LM(TransformerLM):
     
     def prepare_lm_input_target(self, text_token, text_token_emb, text_token_len, speech_token, speech_token_emb, speech_token_len):
         lm_target, lm_input = [], []
-        text_token = unpad_sequence(text_token, text_token_len.cpu(), batch_first=True)
-        speech_token = unpad_sequence(speech_token, speech_token_len.cpu(), batch_first=True)
-        text_token_emb = unpad_sequence(text_token_emb, text_token_len.cpu(), batch_first=True)
-        speech_token_emb = unpad_sequence(speech_token_emb, speech_token_len.cpu(), batch_first=True)
+        text_token = unpad_sequence(text_token, text_token_len.cpu(), batch_first=True)  # 将文本token和文本token长度解包，得到文本token和文本token长度 
+        speech_token = unpad_sequence(speech_token, speech_token_len.cpu(), batch_first=True)  # 将语音token和语音token长度解包，得到语音token和语音token长度
+        text_token_emb = unpad_sequence(text_token_emb, text_token_len.cpu(), batch_first=True)  # 将文本token嵌入和文本token长度解包，得到文本token嵌入和文本token长度
+        speech_token_emb = unpad_sequence(speech_token_emb, speech_token_len.cpu(), batch_first=True)  # 将语音token嵌入和语音token长度解包，得到语音token嵌入和语音token长度
         for i in range(len(text_token)):
             # bistream sequence
-            if random.random() < 0.5 and speech_token_len[i] / text_token_len[i] > self.mix_ratio[1] / self.mix_ratio[0]:
+            if random.random() < 0.5 and speech_token_len[i] / text_token_len[i] > self.mix_ratio[1] / self.mix_ratio[0]:  # 随机生成一个0-1之间的数，如果小于0.5且语音token长度与文本token长度的比值大于mix_ratio[1]与mix_ratio[0]的比值，则进行混合训练
                 this_lm_target, this_lm_input = [], []
                 this_lm_target.append(IGNORE_ID)
                 this_lm_input.append(self.llm_embedding.weight[self.sos_eos].reshape(1, -1))
@@ -400,16 +400,16 @@ class Qwen2LM(TransformerLM):
             audio: (B, T, N) or (B, T)
             audio_lengths: (B,)
         """
-        text_token = batch['text_token'].to(device)
-        text_token_len = batch['text_token_len'].to(device)
-        speech_token = batch['speech_token'].to(device)
-        speech_token_len = batch['speech_token_len'].to(device)
+        text_token = batch['text_token'].to(device)  # 文本token
+        text_token_len = batch['text_token_len'].to(device)  # 文本token长度
+        speech_token = batch['speech_token'].to(device)  # 语音token
+        speech_token_len = batch['speech_token_len'].to(device)  # 语音token长度
 
         # 1. encode text_token
-        text_token_emb = self.llm.model.model.embed_tokens(text_token)
+        text_token_emb = self.llm.model.model.embed_tokens(text_token)  # 文本token嵌入
 
         # 2. encode speech_token
-        speech_token_emb = self.speech_embedding(speech_token)
+        speech_token_emb = self.speech_embedding(speech_token)  # 语音token嵌入
 
         # 3. prepare llm_input/target
         lm_target, lm_input, lm_input_len = self.prepare_lm_input_target(text_token, text_token_emb, text_token_len, speech_token, speech_token_emb, speech_token_len)
