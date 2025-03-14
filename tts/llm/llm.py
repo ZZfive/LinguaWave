@@ -244,15 +244,15 @@ class Qwen2Encoder(torch.nn.Module):
         self.model = Qwen2ForCausalLM.from_pretrained(pretrain_path)
 
     def forward(self, xs: torch.Tensor, xs_lens: torch.Tensor):
-        T = xs.size(1)
-        masks = ~make_pad_mask(xs_lens, T)
+        T = xs.size(1)  # 获取输入的长度，如712
+        masks = ~make_pad_mask(xs_lens, T)  # 先构建一个掩码，标记填充部分，然后取反，得到有效的部分，shape如[3, 712]
         outs = self.model(
             inputs_embeds=xs,
             attention_mask=masks,
             output_hidden_states=True,
             return_dict=True,
         )
-        return outs.hidden_states[-1], masks.unsqueeze(1)
+        return outs.hidden_states[-1], masks.unsqueeze(1)  # 前者为最后一层的隐藏状态，shape如[3, 712, 896]；后者为注意力掩码，shape如[3, 1, 712]
 
     def forward_one_step(self, xs, masks, cache=None):
         input_masks = masks[:, -1, :]  # 只取最后一个时间步的注意力掩码，shape从[1, text_len, text_len]变为[1, text_len]，如[1, 45, 45]->[1, 45]；Qwen2ForCausalLM内部会重新构建有效的causal mask
@@ -317,7 +317,7 @@ class Qwen2LM(TransformerLM):
             sampling: Callable,
             length_normalized_loss: bool = True,
             lsm_weight: float = 0.0,
-            mix_ratio: List[int] = [5, 15],
+            mix_ratio: List[int] = [5, 15],  # 混合训练时，文本token和语音token的比值
     ):
         torch.nn.Module.__init__(self)
         self.llm_input_size = llm_input_size
@@ -348,21 +348,21 @@ class Qwen2LM(TransformerLM):
     
     def prepare_lm_input_target(self, text_token, text_token_emb, text_token_len, speech_token, speech_token_emb, speech_token_len):
         lm_target, lm_input = [], []
-        text_token = unpad_sequence(text_token, text_token_len.cpu(), batch_first=True)  # 将文本token和文本token长度解包，得到文本token和文本token长度 
-        speech_token = unpad_sequence(speech_token, speech_token_len.cpu(), batch_first=True)  # 将语音token和语音token长度解包，得到语音token和语音token长度
-        text_token_emb = unpad_sequence(text_token_emb, text_token_len.cpu(), batch_first=True)  # 将文本token嵌入和文本token长度解包，得到文本token嵌入和文本token长度
-        speech_token_emb = unpad_sequence(speech_token_emb, speech_token_len.cpu(), batch_first=True)  # 将语音token嵌入和语音token长度解包，得到语音token嵌入和语音token长度
+        text_token = unpad_sequence(text_token, text_token_len.cpu(), batch_first=True)  # 一个batch中有多个样本，每个样本长度不同，数据集原始构造时会将同一batch中的样本长度对齐，此处基于每个样本的真实长度获取对应的原始token，去掉pad的部分
+        speech_token = unpad_sequence(speech_token, speech_token_len.cpu(), batch_first=True)  # 同上
+        text_token_emb = unpad_sequence(text_token_emb, text_token_len.cpu(), batch_first=True)  # 同上
+        speech_token_emb = unpad_sequence(speech_token_emb, speech_token_len.cpu(), batch_first=True)  # 同上
         for i in range(len(text_token)):
             # bistream sequence
             if random.random() < 0.5 and speech_token_len[i] / text_token_len[i] > self.mix_ratio[1] / self.mix_ratio[0]:  # 随机生成一个0-1之间的数，如果小于0.5且语音token长度与文本token长度的比值大于mix_ratio[1]与mix_ratio[0]的比值，则进行混合训练
                 this_lm_target, this_lm_input = [], []
-                this_lm_target.append(IGNORE_ID)
-                this_lm_input.append(self.llm_embedding.weight[self.sos_eos].reshape(1, -1))
-                for j in range(((text_token_len[i] + 1) / self.mix_ratio[0]).ceil().int().item()):
-                    this_text_token = text_token[i][j * self.mix_ratio[0]: (j + 1) * self.mix_ratio[0]].tolist()
-                    this_speech_token = speech_token[i][j * self.mix_ratio[1]: (j + 1) * self.mix_ratio[1]].tolist()
-                    if len(this_text_token) == self.mix_ratio[0]:
-                        assert len(this_speech_token) == self.mix_ratio[1]
+                this_lm_target.append(IGNORE_ID)  # taget第一个元素为IGNORE_ID
+                this_lm_input.append(self.llm_embedding.weight[self.sos_eos].reshape(1, -1))  # input第一个元素为sos_eos_emb
+                for j in range(((text_token_len[i] + 1) / self.mix_ratio[0]).ceil().int().item()):  # 文本tokens序列会按chunk size切分后为多个chunk，每次遍历一个chunk
+                    this_text_token = text_token[i][j * self.mix_ratio[0]: (j + 1) * self.mix_ratio[0]].tolist()  # 获取当前chunk的文本token
+                    this_speech_token = speech_token[i][j * self.mix_ratio[1]: (j + 1) * self.mix_ratio[1]].tolist()  # 获取当前chunk的语音token
+                    if len(this_text_token) == self.mix_ratio[0]:  # 因为text_token_len不一定被mix_ratio[0]整除，所以需要判断当前chunk是否为最后一个chunk
+                        assert len(this_speech_token) == self.mix_ratio[1]  # 确保当前chunk的语音token长度与mix_ratio[1]一致
                         this_lm_target += [IGNORE_ID] * (self.mix_ratio[0] - 1)
                         this_lm_target += this_speech_token
                         this_lm_target.append(self.speech_token_size + 2)
@@ -377,15 +377,15 @@ class Qwen2LM(TransformerLM):
                         this_lm_input.append(speech_token_emb[i][j * self.mix_ratio[1]:])
                 this_lm_target, this_lm_input = torch.tensor(this_lm_target), torch.concat(this_lm_input, dim=0)
             # unistream sequence
-            else:
-                this_lm_target = torch.tensor([IGNORE_ID] * (1 + text_token_len[i]) + speech_token[i].tolist() + [self.speech_token_size])
+            else:  # 不为bistream构建混合数据，input为sos+text+task_id+speech，target为IGNORE_ID*(1+text_len)+speech+speech_token_size
+                this_lm_target = torch.tensor([IGNORE_ID] * (1 + text_token_len[i]) + speech_token[i].tolist() + [self.speech_token_size])  # shape如[686]
                 this_lm_input = torch.concat([self.llm_embedding.weight[self.sos_eos].reshape(1, -1), text_token_emb[i],
-                                              self.llm_embedding.weight[self.task_id].reshape(1, -1), speech_token_emb[i]], dim=0)
+                                              self.llm_embedding.weight[self.task_id].reshape(1, -1), speech_token_emb[i]], dim=0)  # shape如[686, 896]，长度要和this_lm_target一致
             lm_target.append(this_lm_target)
             lm_input.append(this_lm_input)
-        lm_input_len = torch.tensor([i.size(0) for i in lm_input], dtype=torch.int32)
-        lm_input = pad_sequence(lm_input, batch_first=True, padding_value=IGNORE_ID)
-        lm_target = pad_sequence(lm_target, batch_first=True, padding_value=IGNORE_ID)
+        lm_input_len = torch.tensor([i.size(0) for i in lm_input], dtype=torch.int32)  # 重新获取最终lm_input的长度，shape如[3]
+        lm_input = pad_sequence(lm_input, batch_first=True, padding_value=IGNORE_ID)  # 将lm_input填充到同一长度，shape如[3, 712, 896]
+        lm_target = pad_sequence(lm_target, batch_first=True, padding_value=IGNORE_ID)  # 将lm_target填充到同一长度，shape如[3, 712]
         return lm_target, lm_input, lm_input_len
     
     def forward(
@@ -400,16 +400,16 @@ class Qwen2LM(TransformerLM):
             audio: (B, T, N) or (B, T)
             audio_lengths: (B,)
         """
-        text_token = batch['text_token'].to(device)  # 文本token
-        text_token_len = batch['text_token_len'].to(device)  # 文本token长度
-        speech_token = batch['speech_token'].to(device)  # 语音token
-        speech_token_len = batch['speech_token_len'].to(device)  # 语音token长度
+        text_token = batch['text_token'].to(device)  # 文本token, shape如[3, 51]
+        text_token_len = batch['text_token_len'].to(device)  # 文本token长度，shape如[3]
+        speech_token = batch['speech_token'].to(device)  # 语音token, shape如[3, 659]
+        speech_token_len = batch['speech_token_len'].to(device)  # 语音token长度，shape如[3]
 
         # 1. encode text_token
-        text_token_emb = self.llm.model.model.embed_tokens(text_token)  # 文本token嵌入
+        text_token_emb = self.llm.model.model.embed_tokens(text_token)  # 文本token嵌入, shape如[3, 51, 896]
 
         # 2. encode speech_token
-        speech_token_emb = self.speech_embedding(speech_token)  # 语音token嵌入
+        speech_token_emb = self.speech_embedding(speech_token)  # 语音token嵌入, shape如[3, 659, 896]
 
         # 3. prepare llm_input/target
         lm_target, lm_input, lm_input_len = self.prepare_lm_input_target(text_token, text_token_emb, text_token_len, speech_token, speech_token_emb, speech_token_len)
@@ -417,9 +417,9 @@ class Qwen2LM(TransformerLM):
 
         # 4. run lm forward
         lm_output, lm_output_mask = self.llm(lm_input, lm_input_len.to(device))
-        logits = self.llm_decoder(lm_output)
-        loss = self.criterion_ce(logits, lm_target.to(device))
-        acc = th_accuracy(logits.view(-1, self.speech_token_size + 3), lm_target, ignore_label=IGNORE_ID)
+        logits = self.llm_decoder(lm_output)  # 解码器输出，shape如[3, 712, 6564]
+        loss = self.criterion_ce(logits, lm_target.to(device))  # 计算交叉熵损失，一个标量，无shape
+        acc = th_accuracy(logits.view(-1, self.speech_token_size + 3), lm_target, ignore_label=IGNORE_ID)  # 计算准确率，一个标量，无shape
         return {'loss': loss, 'acc': acc}
 
     @torch.inference_mode()
