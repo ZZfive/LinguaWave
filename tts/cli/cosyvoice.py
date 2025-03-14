@@ -12,7 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import sys
+from pathlib import Path
+current_file_dir = Path(__file__).resolve().parent
+sys.path.append(str(current_file_dir))
+sys.path.append(str(current_file_dir.parent))
 import time
 from typing import Generator
 
@@ -184,7 +189,7 @@ class CosyVoice2OtherLLM(CosyVoice):
         with open(yaml_path, 'r') as f:
             configs = load_hyperpyyaml(f)
         assert get_model_type(configs) == CosyVoice2ModelOtherLLM, 'do not use {} for CosyVoice2OtherLLM initialization!'.format(yaml_path)
-        self.frontend = CosyVoiceFrontEnd(configs['get_tokenizer'],  # 文本分词器，Qwen2Tokenizer
+        self.frontend = CosyVoiceFrontEnd(configs['get_tokenizer'],  # 文本分词器
                                           configs['feat_extractor'],  # 音频mel谱图提取器
                                           '{}/campplus.onnx'.format(model_dir),  # campplus模型，是一个说话人特征提取模型
                                           '{}/speech_tokenizer_v2.onnx'.format(model_dir),  # 语音分词器tokenizer，将语音信号离散为token ids序列
@@ -195,9 +200,9 @@ class CosyVoice2OtherLLM(CosyVoice):
             load_jit, load_trt, fp16 = False, False, False
             logging.warning('no cuda device, set load_jit/load_trt/fp16 to False')
         self.model = CosyVoice2ModelOtherLLM(configs['llm'], configs['flow'], configs['hift'], fp16)
-        self.model.load('{}/llm.pt'.format(model_dir),
-                        '{}/flow.pt'.format(model_dir),
-                        '{}/hift.pt'.format(model_dir),
+        self.model.load(llm_model='{}/llm.pt'.format(model_dir),
+                        flow_model='{}/flow.pt'.format(model_dir),
+                        hift_model='{}/hift.pt'.format(model_dir),
                         llm_not_loaded=llm_not_loaded)  # 不加载llm权重参数
         if load_jit:
             self.model.load_jit('{}/flow.encoder.{}.zip'.format(model_dir, 'fp16' if self.fp16 is True else 'fp32'))

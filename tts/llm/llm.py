@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import random
 from typing import Dict, Optional, Callable, List, Generator
 import torch
 from torch import nn
@@ -21,6 +22,7 @@ from tts.utils.common import IGNORE_ID
 from tts.transformer.label_smoothing_loss import LabelSmoothingLoss
 from tts.utils.common import th_accuracy
 from tts.utils.file_utils import logging
+from tts.utils.mask import make_pad_mask
 
 
 class TransformerLM(torch.nn.Module):
@@ -241,6 +243,17 @@ class Qwen2Encoder(torch.nn.Module):
         super().__init__()
         self.model = Qwen2ForCausalLM.from_pretrained(pretrain_path)
 
+    def forward(self, xs: torch.Tensor, xs_lens: torch.Tensor):
+        T = xs.size(1)
+        masks = ~make_pad_mask(xs_lens, T)
+        outs = self.model(
+            inputs_embeds=xs,
+            attention_mask=masks,
+            output_hidden_states=True,
+            return_dict=True,
+        )
+        return outs.hidden_states[-1], masks.unsqueeze(1)
+
     def forward_one_step(self, xs, masks, cache=None):
         input_masks = masks[:, -1, :]  # 只取最后一个时间步的注意力掩码，shape从[1, text_len, text_len]变为[1, text_len]，如[1, 45, 45]->[1, 45]；Qwen2ForCausalLM内部会重新构建有效的causal mask
         outs = self.model(
@@ -332,6 +345,82 @@ class Qwen2LM(TransformerLM):
         # 4. sampling method
         self.sampling = sampling
         self.mix_ratio = mix_ratio
+    
+    def prepare_lm_input_target(self, text_token, text_token_emb, text_token_len, speech_token, speech_token_emb, speech_token_len):
+        lm_target, lm_input = [], []
+        text_token = unpad_sequence(text_token, text_token_len.cpu(), batch_first=True)
+        speech_token = unpad_sequence(speech_token, speech_token_len.cpu(), batch_first=True)
+        text_token_emb = unpad_sequence(text_token_emb, text_token_len.cpu(), batch_first=True)
+        speech_token_emb = unpad_sequence(speech_token_emb, speech_token_len.cpu(), batch_first=True)
+        for i in range(len(text_token)):
+            # bistream sequence
+            if random.random() < 0.5 and speech_token_len[i] / text_token_len[i] > self.mix_ratio[1] / self.mix_ratio[0]:
+                this_lm_target, this_lm_input = [], []
+                this_lm_target.append(IGNORE_ID)
+                this_lm_input.append(self.llm_embedding.weight[self.sos_eos].reshape(1, -1))
+                for j in range(((text_token_len[i] + 1) / self.mix_ratio[0]).ceil().int().item()):
+                    this_text_token = text_token[i][j * self.mix_ratio[0]: (j + 1) * self.mix_ratio[0]].tolist()
+                    this_speech_token = speech_token[i][j * self.mix_ratio[1]: (j + 1) * self.mix_ratio[1]].tolist()
+                    if len(this_text_token) == self.mix_ratio[0]:
+                        assert len(this_speech_token) == self.mix_ratio[1]
+                        this_lm_target += [IGNORE_ID] * (self.mix_ratio[0] - 1)
+                        this_lm_target += this_speech_token
+                        this_lm_target.append(self.speech_token_size + 2)
+                        this_lm_input.append(text_token_emb[i][j * self.mix_ratio[0]: (j + 1) * self.mix_ratio[0]])
+                        this_lm_input.append(speech_token_emb[i][j * self.mix_ratio[1]: (j + 1) * self.mix_ratio[1]])
+                    else:
+                        this_lm_target += [-1] * len(this_text_token)
+                        this_lm_target += speech_token[i][j * self.mix_ratio[1]:].tolist()
+                        this_lm_target.append(self.speech_token_size)
+                        this_lm_input.append(text_token_emb[i][j * self.mix_ratio[0]:])
+                        this_lm_input.append(self.llm_embedding.weight[self.task_id].reshape(1, -1))
+                        this_lm_input.append(speech_token_emb[i][j * self.mix_ratio[1]:])
+                this_lm_target, this_lm_input = torch.tensor(this_lm_target), torch.concat(this_lm_input, dim=0)
+            # unistream sequence
+            else:
+                this_lm_target = torch.tensor([IGNORE_ID] * (1 + text_token_len[i]) + speech_token[i].tolist() + [self.speech_token_size])
+                this_lm_input = torch.concat([self.llm_embedding.weight[self.sos_eos].reshape(1, -1), text_token_emb[i],
+                                              self.llm_embedding.weight[self.task_id].reshape(1, -1), speech_token_emb[i]], dim=0)
+            lm_target.append(this_lm_target)
+            lm_input.append(this_lm_input)
+        lm_input_len = torch.tensor([i.size(0) for i in lm_input], dtype=torch.int32)
+        lm_input = pad_sequence(lm_input, batch_first=True, padding_value=IGNORE_ID)
+        lm_target = pad_sequence(lm_target, batch_first=True, padding_value=IGNORE_ID)
+        return lm_target, lm_input, lm_input_len
+    
+    def forward(
+            self,
+            batch: dict,
+            device: torch.device,
+    ) -> Dict[str, Optional[torch.Tensor]]:
+        """
+        Args:
+            text: (B, L, D)
+            text_lengths: (B,)
+            audio: (B, T, N) or (B, T)
+            audio_lengths: (B,)
+        """
+        text_token = batch['text_token'].to(device)
+        text_token_len = batch['text_token_len'].to(device)
+        speech_token = batch['speech_token'].to(device)
+        speech_token_len = batch['speech_token_len'].to(device)
+
+        # 1. encode text_token
+        text_token_emb = self.llm.model.model.embed_tokens(text_token)
+
+        # 2. encode speech_token
+        speech_token_emb = self.speech_embedding(speech_token)
+
+        # 3. prepare llm_input/target
+        lm_target, lm_input, lm_input_len = self.prepare_lm_input_target(text_token, text_token_emb, text_token_len, speech_token, speech_token_emb, speech_token_len)
+        lm_target = lm_target.to(device)
+
+        # 4. run lm forward
+        lm_output, lm_output_mask = self.llm(lm_input, lm_input_len.to(device))
+        logits = self.llm_decoder(lm_output)
+        loss = self.criterion_ce(logits, lm_target.to(device))
+        acc = th_accuracy(logits.view(-1, self.speech_token_size + 3), lm_target, ignore_label=IGNORE_ID)
+        return {'loss': loss, 'acc': acc}
 
     @torch.inference_mode()
     def inference(
@@ -352,7 +441,7 @@ class Qwen2LM(TransformerLM):
         text_len += prompt_text_len
         text = self.llm.model.model.embed_tokens(text)  # 用Qwen2Encoder对象中的embedding层进行文本特征，[1, text_len, llm_input_size]，如[1, 8, 896]
 
-        # 2. encode embedding
+        # # 2. encode embedding
         # embedding = torch.zeros(1, 0, self.llm_input_size, dtype=text.dtype).to(device).to(text.dtype)  # [1, 0, 896]；与cosyvoice中不同，cosyvoice2在speech tokens预测时不使用说话人embedding
 
         # 3. concat llm_input
@@ -492,6 +581,17 @@ class InternLM2Encoder(torch.nn.Module):
         super().__init__()
         self.model = AutoModelForCausalLM.from_pretrained(pretrain_path, trust_remote_code=True)
 
+    def forward(self, xs: torch.Tensor, xs_lens: torch.Tensor):
+        T = xs.size(1)
+        masks = ~make_pad_mask(xs_lens, T)
+        outs = self.model(
+            inputs_embeds=xs,
+            attention_mask=masks,
+            output_hidden_states=True,
+            return_dict=True,
+        )
+        return outs.hidden_states[-1], masks.unsqueeze(1)
+
     def forward_one_step(self, xs, masks, cache=None):
         input_masks = masks[:, -1, :]  # 只取最后一个时间步的注意力掩码，shape从[1, text_len, text_len]变为[1, text_len]，如[1, 45, 45]->[1, 45]；InternLM2ForCausalLM内部会重新构建有效的causal mask
         outs = self.model(
@@ -553,6 +653,7 @@ class InternLM2LM(torch.nn.Module):
             sampling: Callable = None,
             length_normalized_loss: bool = True,
             lsm_weight: float = 0.0,
+            mix_ratio: List[int] = [5, 15],
     ):
         super().__init__()
         self.llm_input_size = llm_input_size
@@ -579,6 +680,84 @@ class InternLM2LM(torch.nn.Module):
 
         # 4. sampling method
         self.sampling = sampling
+        self.mix_ratio = mix_ratio
+
+    def prepare_lm_input_target(self, text_token, text_token_emb, text_token_len, speech_token, speech_token_emb, speech_token_len):
+        lm_target, lm_input = [], []
+        text_token = unpad_sequence(text_token, text_token_len.cpu(), batch_first=True)
+        speech_token = unpad_sequence(speech_token, speech_token_len.cpu(), batch_first=True)
+        text_token_emb = unpad_sequence(text_token_emb, text_token_len.cpu(), batch_first=True)
+        speech_token_emb = unpad_sequence(speech_token_emb, speech_token_len.cpu(), batch_first=True)
+        for i in range(len(text_token)):
+            # bistream sequence
+            if random.random() < 0.5 and speech_token_len[i] / text_token_len[i] > self.mix_ratio[1] / self.mix_ratio[0]:
+                this_lm_target, this_lm_input = [], []
+                this_lm_target.append(IGNORE_ID)
+                this_lm_input.append(self.llm_embedding.weight[self.sos_eos].reshape(1, -1))
+                for j in range(((text_token_len[i] + 1) / self.mix_ratio[0]).ceil().int().item()):
+                    this_text_token = text_token[i][j * self.mix_ratio[0]: (j + 1) * self.mix_ratio[0]].tolist()
+                    this_speech_token = speech_token[i][j * self.mix_ratio[1]: (j + 1) * self.mix_ratio[1]].tolist()
+                    if len(this_text_token) == self.mix_ratio[0]:
+                        assert len(this_speech_token) == self.mix_ratio[1]
+                        this_lm_target += [IGNORE_ID] * (self.mix_ratio[0] - 1)
+                        this_lm_target += this_speech_token
+                        this_lm_target.append(self.speech_token_size + 2)
+                        this_lm_input.append(text_token_emb[i][j * self.mix_ratio[0]: (j + 1) * self.mix_ratio[0]])
+                        this_lm_input.append(speech_token_emb[i][j * self.mix_ratio[1]: (j + 1) * self.mix_ratio[1]])
+                    else:
+                        this_lm_target += [-1] * len(this_text_token)
+                        this_lm_target += speech_token[i][j * self.mix_ratio[1]:].tolist()
+                        this_lm_target.append(self.speech_token_size)
+                        this_lm_input.append(text_token_emb[i][j * self.mix_ratio[0]:])
+                        this_lm_input.append(self.llm_embedding.weight[self.task_id].reshape(1, -1))
+                        this_lm_input.append(speech_token_emb[i][j * self.mix_ratio[1]:])
+                this_lm_target, this_lm_input = torch.tensor(this_lm_target), torch.concat(this_lm_input, dim=0)
+            # unistream sequence
+            else:
+                this_lm_target = torch.tensor([IGNORE_ID] * (1 + text_token_len[i]) + speech_token[i].tolist() + [self.speech_token_size])
+                this_lm_input = torch.concat([self.llm_embedding.weight[self.sos_eos].reshape(1, -1), text_token_emb[i],
+                                              self.llm_embedding.weight[self.task_id].reshape(1, -1), speech_token_emb[i]], dim=0)
+            lm_target.append(this_lm_target)
+            lm_input.append(this_lm_input)
+        lm_input_len = torch.tensor([i.size(0) for i in lm_input], dtype=torch.int32)
+        lm_input = pad_sequence(lm_input, batch_first=True, padding_value=IGNORE_ID)
+        lm_target = pad_sequence(lm_target, batch_first=True, padding_value=IGNORE_ID)
+        return lm_target, lm_input, lm_input_len
+    
+
+    def forward(
+            self,
+            batch: dict,
+            device: torch.device,
+    ) -> Dict[str, Optional[torch.Tensor]]:
+        """
+        Args:
+            text: (B, L, D)
+            text_lengths: (B,)
+            audio: (B, T, N) or (B, T)
+            audio_lengths: (B,)
+        """
+        text_token = batch['text_token'].to(device)
+        text_token_len = batch['text_token_len'].to(device)
+        speech_token = batch['speech_token'].to(device)
+        speech_token_len = batch['speech_token_len'].to(device)
+
+        # 1. encode text_token
+        text_token_emb = self.llm.model.model.tok_embeddings(text_token)
+
+        # 2. encode speech_token
+        speech_token_emb = self.speech_embedding(speech_token)
+
+        # 3. prepare llm_input/target
+        lm_target, lm_input, lm_input_len = self.prepare_lm_input_target(text_token, text_token_emb, text_token_len, speech_token, speech_token_emb, speech_token_len)
+        lm_target = lm_target.to(device)
+
+        # 4. run lm forward
+        lm_output, lm_output_mask = self.llm(lm_input, lm_input_len.to(device))
+        logits = self.llm_decoder(lm_output)
+        loss = self.criterion_ce(logits, lm_target.to(device))
+        acc = th_accuracy(logits.view(-1, self.speech_token_size + 3), lm_target, ignore_label=IGNORE_ID)
+        return {'loss': loss, 'acc': acc}
     
     def sampling_ids(
             self,
@@ -616,8 +795,8 @@ class InternLM2LM(torch.nn.Module):
         text_len += prompt_text_len
         text = self.llm.model.model.tok_embeddings(text)  # 用Qwen2Encoder对象中的embedding层进行文本特征，[1, text_len, llm_input_size]，如[1, 8, 2048]
 
-        # 2. encode embedding
-        embedding = torch.zeros(1, 0, self.llm_input_size, dtype=text.dtype).to(device).to(text.dtype)  # [1, 0, 2048]；与cosyvoice中不同，cosyvoice2在speech tokens预测时不使用说话人embedding
+        # # 2. encode embedding
+        # embedding = torch.zeros(1, 0, self.llm_input_size, dtype=text.dtype).to(device).to(text.dtype)  # [1, 0, 2048]；与cosyvoice中不同，cosyvoice2在speech tokens预测时不使用说话人embedding
 
         # 3. concat llm_input
         sos_eos_emb = self.llm_embedding.weight[self.sos_eos].reshape(1, 1, -1)  # [1, 1, 2048]
@@ -626,7 +805,7 @@ class InternLM2LM(torch.nn.Module):
             prompt_speech_token_emb = self.speech_embedding(prompt_speech_token)  # 如[1, 35, 2048]
         else:
             prompt_speech_token_emb = torch.zeros(1, 0, self.llm_input_size, dtype=text.dtype).to(device)  # [1, 0, 2048]
-        lm_input = torch.concat([sos_eos_emb, embedding, text, task_id_emb, prompt_speech_token_emb], dim=1)  # 如[1, 45, 2048]；将sos_eos_emb、embedding、text、task_id_emb、prompt_speech_token_emb拼接在一起，得到lm_input
+        lm_input = torch.concat([sos_eos_emb, text, task_id_emb, prompt_speech_token_emb], dim=1)  # 如[1, 45, 2048]；将sos_eos_emb、embedding、text、task_id_emb、prompt_speech_token_emb拼接在一起，得到lm_input
 
         # 4. cal min/max_length
         min_len = int((text_len - prompt_text_len) * min_token_text_ratio)  # 基于参考音频文本长度和待生成文本长度计算单次推理最小预测长度

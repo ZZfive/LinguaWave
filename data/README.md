@@ -21,4 +21,4 @@
    4. [make_parquet_list.py](./libritts/make_parquet_list.py)--将之前步骤中生成的文件或数据转换为parquet格式保存，按一定数量保存在多个tar文件和一些list文件；再使用多个json和list文件记录具体的数据信息，在后续构建数据集时基于此进行加载
 
 ## tts
-&emsp;&emsp;在将LibriTTS数据集预处理过程和数据集构建的处理过程分析完成后，将CosyVoice项目中提供的对LibriTTS数据集和Mgaicdata-read数据集的预处理过程尽心了对比，除了数据准备存在差异外，另外三步完全一致，故将[libritts](libritts)路径下的文件直接作为tts类别统一处理方式，复制到[tts](tts)路径下，可能会针对不同数据集进行一些修改。
+&emsp;&emsp;在将LibriTTS数据集预处理过程和数据集构建的处理过程分析完成后，将CosyVoice项目中提供的对LibriTTS数据集和Mgaicdata-read数据集的预处理过程进行了对比，除了数据准备存在差异外，另外三步完全一致，故将[libritts](libritts)路径下的文件直接作为tts类别统一处理方式，复制到[tts](tts)路径下，可能会针对不同数据集进行一些修改。
