@@ -50,6 +50,48 @@ def init_distributed(args):  # 初始化分布式训练环境
     return world_size, local_rank, rank
 
 
+def init_distributed_debug(args):  # 初始化分布式训练环境
+    # 尝试从环境变量获取分布式训练参数，如果不存在则使用默认值
+    world_size = int(os.environ.get('WORLD_SIZE', 1))  # 获取分布式训练中的进程总数
+    local_rank = int(os.environ.get('LOCAL_RANK', 0))  # 获取当前进程在本地机器上的GPU编号，是单机多卡中的编号
+    rank = int(os.environ.get('RANK', 0))  # 全局进程编号，是进程在整个训练集群中的全局编号
+    
+    logging.info('training on multiple gpus, this gpu {}'.format(local_rank) +
+                 ', rank {}, world_size {}'.format(rank, world_size))
+    
+    if args.train_engine == 'torch_ddp':  # 使用PyTorch DDP进行分布式训练
+        torch.cuda.set_device(local_rank)  # 设置当前进程使用的GPU
+        
+        # 检查是否设置了必要的环境变量
+        env_ready = all(var in os.environ for var in ['RANK', 'WORLD_SIZE', 'MASTER_ADDR', 'MASTER_PORT'])
+        
+        if env_ready:
+            # 如果环境变量已设置，使用env://方式初始化
+            dist.init_process_group(args.dist_backend)
+        else:
+            # 如果环境变量未设置，使用更明确的参数初始化
+            # 设置默认的master地址和端口
+            master_addr = os.environ.get('MASTER_ADDR', 'localhost')
+            master_port = os.environ.get('MASTER_PORT', '12355')
+            
+            logging.warning(f"环境变量未完全设置，使用默认值初始化分布式环境: "
+                           f"rank={rank}, world_size={world_size}, "
+                           f"master_addr={master_addr}, master_port={master_port}")
+            
+            # 使用明确的参数初始化进程组
+            dist.init_process_group(
+                backend=args.dist_backend,
+                init_method=f'tcp://{master_addr}:{master_port}',
+                world_size=world_size,
+                rank=rank
+            )
+    else:
+        # DeepSpeed初始化
+        deepspeed.init_distributed(dist_backend=args.dist_backend)
+    
+    return world_size, local_rank, rank
+
+
 def init_dataset_and_dataloader(args, configs, gan):  # 初始化训练和验证数据集和数据加载器
     data_pipeline = configs['data_pipeline_gan'] if gan is True else configs['data_pipeline']
     train_dataset = Dataset(args.train_data, data_pipeline=data_pipeline, mode='train', gan=gan, shuffle=True, partition=True)
