@@ -13,6 +13,11 @@
 # limitations under the License.
 
 from __future__ import print_function
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+import sys
+sys.path.append("/root/code/LinguaWave")
+sys.path.append("/root/code/LinguaWave/third_party/Matcha-TTS")
 import argparse
 import datetime
 import logging
@@ -30,6 +35,7 @@ from torch.distributed.elastic.multiprocessing.errors import record
 from tts.utils.executor import Executor
 from tts.utils.train_utils import (
     init_distributed,
+    init_distributed_debug,
     init_dataset_and_dataloader,
     init_optimizer_and_scheduler,
     init_summarywriter, save_model,
@@ -42,15 +48,21 @@ def get_args():
                         default='torch_ddp',
                         choices=['torch_ddp', 'deepspeed'],
                         help='Engine for paralleled training')
-    parser.add_argument('--model', required=True, help='model which will be trained')
-    parser.add_argument('--config', required=True, help='config file')
-    parser.add_argument('--train_data', required=True, help='train data file')
-    parser.add_argument('--cv_data', required=True, help='cv data file')
-    parser.add_argument('--qwen_pretrain_path', required=False, help='qwen pretrain path')
-    parser.add_argument('--checkpoint', help='checkpoint model')
-    parser.add_argument('--model_dir', required=True, help='save model dir')
+    parser.add_argument('--model', default='llm', help='model which will be trained')
+    parser.add_argument('--config', default='/root/code/LinguaWave/tts/yamls/cosyvoice2_internlm2_llm_train.yaml',
+                        help='config file')
+    parser.add_argument('--train_data', default='/root/data/parquet/dev-clean/data.list',
+                        help='train data file')
+    parser.add_argument('--cv_data', default='/root/data/parquet/dev-clean/data.list',
+                        help='cv data file')
+    parser.add_argument('--llm_pretrain_path', default='/root/share/new_models/Shanghai_AI_Laboratory/internlm2_5-1_8b',
+                        required=False, help='llm pretrain path')
+    parser.add_argument('--checkpoint', default=None,  # 已经预训练过的模型
+                        help='checkpoint model')
+    parser.add_argument('--model_dir', default='/group_share/tts/pretrained_weights/internlm2_5-1_8b_libritts_dev-clean',
+                        help='save model dir')
     parser.add_argument('--tensorboard_dir',
-                        default='tensorboard',
+                        default='/group_share/tts/pretrained_weights/internlm2_5-1_8b_libritts_dev-clean/logs',
                         help='tensorboard log dir')
     parser.add_argument('--ddp.dist_backend',
                         dest='dist_backend',
@@ -58,7 +70,7 @@ def get_args():
                         choices=['nccl', 'gloo'],
                         help='distributed backend')
     parser.add_argument('--num_workers',
-                        default=0,
+                        default=1,
                         type=int,
                         help='num of subprocess workers for reading')
     parser.add_argument('--prefetch',
@@ -67,15 +79,15 @@ def get_args():
                         help='prefetch number')
     parser.add_argument('--pin_memory',
                         action='store_true',
-                        default=False,
+                        default=True,
                         help='Use pinned memory buffers used for reading')
     parser.add_argument('--use_amp',
                         action='store_true',
-                        default=False,
+                        default=True,
                         help='Use automatic mixed precision training')
     parser.add_argument('--deepspeed.save_states',
                         dest='save_states',
-                        default='model_only',
+                        default='model+optimizer',
                         choices=['model_only', 'model+optimizer'],
                         help='save model/optimizer states')
     parser.add_argument('--timeout',
