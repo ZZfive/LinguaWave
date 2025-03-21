@@ -420,7 +420,11 @@ class CosyVoice2ModelOtherLLM(CosyVoice2Model):
 
     def load(self, llm_model, flow_model, hift_model, llm_not_loaded: bool = False):
         if not llm_not_loaded:
-            self.llm.load_state_dict(torch.load(llm_model, map_location=self.device), strict=True)
+            state_dict = torch.load(llm_model, map_location=self.device)
+            for key in ['epoch', 'step']:
+                if key in state_dict:
+                    del state_dict[key]
+            self.llm.load_state_dict(state_dict, strict=True)
         self.llm.to(self.device).eval()
         self.flow.load_state_dict(torch.load(flow_model, map_location=self.device), strict=True)
         self.flow.to(self.device).eval()

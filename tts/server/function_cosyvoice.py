@@ -2,8 +2,8 @@ import re
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import sys
-sys.path.append("~/LinguaWave")
-sys.path.append("/the/path/to/third_party/Matcha-TTS")
+sys.path.append("/root/code/LinguaWave")  # 将项目根目录添加到Python路径
+sys.path.append("/root/code/LinguaWave/third_party/Matcha-TTS")  # 将依赖的Matcha-TTS目录添加到Python路径
 import random
 from typing import List
 
@@ -22,8 +22,8 @@ except ImportError:
 from tts.utils.file_utils import load_wav
 from tts.cli.cosyvoice import CosyVoice2OtherLLM
 
-video_save_dir = "~/audios"
-prompt_sr, target_sr = 16000, 24000
+audio_save_dir = "/root/code/LinguaWave"  # 音频保存路径
+prompt_sr, target_sr = 16000, 24000  # 输入采样率， 目标采样率
 max_val = 0.8
 
 
@@ -65,10 +65,10 @@ def save_audio_to_wav(audio_data_list: List[np.ndarray], sample_rate: int, file_
     write(file_path, sample_rate, audio_data)
 
 
-# 基于cosyvoice实现文本生音频
+# 声音克隆
 def cosyvoice_audio_clone(cosyvoice: torch.nn.Module, tts_text: str, prompt_text: str, prompt_wav_path: str, seed: int = None,
                           apply_noise_reduction: bool = True, prop_decrease: float = 0.6, n_std_thresh_stationary: float = 2,
-                          cross_lingual: bool = False, save_dir: str = video_save_dir, name: str = None) -> str:
+                          cross_lingual: bool = False, save_dir: str = audio_save_dir, name: str = None) -> str:
     save_path = ""
     try:
         if prompt_text == '' or prompt_text is None:
@@ -104,7 +104,32 @@ def cosyvoice_audio_clone(cosyvoice: torch.nn.Module, tts_text: str, prompt_text
                 # yield (target_sr,  audio_numpy)
                 audio_data_list.append(audio_numpy)
         
-        audio_name = f'{name}.wav' if name is not None else f'audio_{seed}.wav'
+        audio_name = f'{name}_{seed}.wav' if name is not None else f'audio_{seed}.wav'
+        save_path = os.path.join(save_dir, audio_name)
+        save_audio_to_wav(audio_data_list, target_sr, save_path, apply_noise_reduction,
+                          prop_decrease, n_std_thresh_stationary)
+        
+        return save_path
+    finally:
+        torch.cuda.empty_cache()
+
+
+# 单纯生成对应文本音频
+def cosyvoice_tts(cosyvoice: torch.nn.Module, tts_text: str, spk_id = None, seed: int = None, apply_noise_reduction: bool = True,
+                  prop_decrease: float = 0.6, n_std_thresh_stationary: float = 2, save_dir: str = audio_save_dir,
+                  name: str = None) -> str:
+    save_path = ""
+    try:
+        seed = random.randint(1, 100000000) if seed is None else seed
+        set_all_random_seed(seed)
+        
+        audio_data_list = []
+        for i in cosyvoice.inference_sft(tts_text, spk_id):
+            audio_numpy = i['tts_speech'].numpy().flatten()
+            # yield (target_sr,  audio_numpy)
+            audio_data_list.append(audio_numpy)
+        
+        audio_name = f'{name}_{seed}.wav' if name is not None else f'audio_{seed}.wav'
         save_path = os.path.join(save_dir, audio_name)
         save_audio_to_wav(audio_data_list, target_sr, save_path, apply_noise_reduction,
                           prop_decrease, n_std_thresh_stationary)
@@ -115,11 +140,14 @@ def cosyvoice_audio_clone(cosyvoice: torch.nn.Module, tts_text: str, prompt_text
 
 
 if __name__ == '__main__':
-    model = CosyVoice2OtherLLM(yaml_path='~/LinguaWave/tts/yamls/cosyvoice2_other_llm.yaml',
-                               model_dir='/the/path/to/CosyVoice2-0.5B',
-                               llm_not_loaded=True)
-    tts_text = '你好呀，我的朋友'
-    prompt_text = '我是通一实验室语音团队全新推出的深层式语音大模型提供舒适自然的语音合成能力'
-    prompt_wav_path = '/the/path/to/cosyvoice.mp3'
-    test_wav_path = cosyvoice_audio_clone(model, tts_text, prompt_text, prompt_wav_path, name='internlm2_5-1_8b-test')
+    model = CosyVoice2OtherLLM(yaml_path='/root/code/LinguaWave/tts/yamls/cosyvoice2_internlm2_5-1_8b_llm.yaml',
+                               model_dir='/root/weight/CosyVoice2-0.5B',
+                               single_llm_path='/root/weight/internlm2_5-1_8b_libritts_dev-clean/epoch_49_whole.pt')
+    # tts_text = '你好呀，我的朋友'
+    # prompt_text = '我是通一实验室语音团队全新推出的深层式语音大模型提供舒适自然的语音合成能力'
+    # prompt_wav_path = '/root/code/LinguaWave/cosyvoice.mp3'
+    # test_wav_path = cosyvoice_audio_clone(model, tts_text, prompt_text, prompt_wav_path, name='internlm2_5-1_8b-test')
+
+    tts_text = 'Hello, my friend. What is your name?'
+    test_wav_path = cosyvoice_tts(model, tts_text, name='internlm2_5-1_8b-test')
     print(test_wav_path)

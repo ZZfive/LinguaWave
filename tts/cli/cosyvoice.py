@@ -71,7 +71,7 @@ class CosyVoice:
         spks = list(self.frontend.spk2info.keys())
         return spks
 
-    def inference_sft(self, tts_text, spk_id, stream=False, speed=1.0, text_frontend=True):
+    def inference_sft(self, tts_text, spk_id=None, stream=False, speed=1.0, text_frontend=True):
         for i in tqdm(self.frontend.text_normalize(tts_text, split=True, text_frontend=text_frontend)):
             model_input = self.frontend.frontend_sft(i, spk_id)
             start_time = time.time()
@@ -182,7 +182,7 @@ class CosyVoice2(CosyVoice):
 
 
 class CosyVoice2OtherLLM(CosyVoice):
-    def __init__(self, yaml_path: str, model_dir: str, load_jit=False, load_trt=False, fp16=False, llm_not_loaded=False):
+    def __init__(self, yaml_path: str, model_dir: str, load_jit=False, load_trt=False, fp16=False, single_llm_path: str = None):
         self.fp16 = fp16
         if not os.path.exists(yaml_path):
             raise FileNotFoundError(f"YAML file not found: {yaml_path}")
@@ -200,10 +200,10 @@ class CosyVoice2OtherLLM(CosyVoice):
             load_jit, load_trt, fp16 = False, False, False
             logging.warning('no cuda device, set load_jit/load_trt/fp16 to False')
         self.model = CosyVoice2ModelOtherLLM(configs['llm'], configs['flow'], configs['hift'], fp16)
-        self.model.load(llm_model='{}/llm.pt'.format(model_dir),
+        self.model.load(llm_model='{}/llm.pt'.format(model_dir) if single_llm_path is None else single_llm_path,
                         flow_model='{}/flow.pt'.format(model_dir),
                         hift_model='{}/hift.pt'.format(model_dir),
-                        llm_not_loaded=llm_not_loaded)  # 不加载llm权重参数
+                        llm_not_loaded=True if single_llm_path is None else False)  # 不加载llm权重参数
         if load_jit:
             self.model.load_jit('{}/flow.encoder.{}.zip'.format(model_dir, 'fp16' if self.fp16 is True else 'fp32'))
         if load_trt:
@@ -215,8 +215,7 @@ class CosyVoice2OtherLLM(CosyVoice):
 
 if __name__ == '__main__':
     model = CosyVoice2OtherLLM(yaml_path='~/LinguaWave/tts/yamls/cosyvoice2_other_llm.yaml',
-                               model_dir='/the/path/to/CosyVoice2-0.5B',
-                               llm_not_loaded=True)
+                               model_dir='/the/path/to/CosyVoice2-0.5B')
     tokenizer = model.frontend.tokenizer
     tokens_ids = tokenizer.encode('hello world')
     print(tokens_ids)

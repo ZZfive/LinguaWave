@@ -9,7 +9,7 @@ sample_rate: 24000
 llm_input_size: 2048
 llm_output_size: 2048
 spk_embed_dim: 192
-llm_pretrain_path: '~/weights/internlm2_5-1_8b'
+llm_pretrain_path: '/root/internlm2_5-1_8b'  # 最好从huggingface重新下载
 
 # model params
 # for all class/function included in this repo, we use !<name> or !<new> for intialization, so that user may find all corresponding class/function according to one single yaml.

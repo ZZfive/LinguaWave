@@ -9,7 +9,7 @@ sample_rate: 24000
 llm_input_size: 2048
 llm_output_size: 2048
 spk_embed_dim: 192
-llm_pretrain_path: ''
+llm_pretrain_path: '/root/share/new_models/Shanghai_AI_Laboratory/internlm2_5-1_8b'
 token_frame_rate: 25
 token_mel_ratio: 2
 
